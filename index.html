@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eel Energy Machine</title>
+<meta name="description" content="3D viewer for a passive electric-eel habitat harvester and an eel-inspired artificial electric organ.">
+<style>
+  :root {
+    --bg: #0f1216; --panel: rgba(20, 24, 30, 0.92); --line: #2a313b; --text: #e8ebef;
+    --muted: #9aa4b1; --accent: #f2b33d; --accent-ink: #1d1404; --ok: #57c486;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #view { position: fixed; inset: 0; }
+  #panel { position: fixed; top: 16px; left: 16px; width: 320px; max-height: calc(100% - 32px); overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; backdrop-filter: blur(6px); }
+  h1 { font-size: 17px; margin: 0 0 2px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+  .seg { display: flex; gap: 6px; margin-bottom: 14px; }
+  .seg button { flex: 1; padding: 8px 6px; border-radius: 8px; border: 1px solid var(--line); background: transparent;
+    color: var(--text); cursor: pointer; font: inherit; font-size: 12.5px; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  h2 { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+  #layers label { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; font-size: 13px; }
+  #layers input { accent-color: var(--accent); }
+  #info { border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-height: 74px; font-size: 13px; }
+  #info b { display: block; margin-bottom: 4px; }
+  #info .path { color: var(--muted); font-size: 11.5px; display: block; margin-bottom: 4px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row a { color: var(--accent); text-decoration: none; font-size: 12.5px; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+  .row a:hover { border-color: var(--accent); }
+  .tog { display: flex; gap: 14px; font-size: 13px; }
+  .tog label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  #status { position: fixed; right: 16px; bottom: 14px; color: var(--muted); font-size: 12px; }
+  #hide { position: fixed; top: 16px; right: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12.5px; }
+  body.noui #panel, body.noui #status, body.noui #hide { display: none; }
+  body.collapsed #panel { display: none; }
+  @media (max-width: 640px) {
+    #panel { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 46%; border-radius: 12px 12px 0 0; }
+    #status { display: none; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="view"></div>
+<button id="hide" type="button">Hide panel</button>
+<aside id="panel">
+  <h1>Eel energy machine</h1>
+  <p class="sub">Collect only the pulses the eel fires anyway, and use that energy for the eel. For real power, copy the eel instead.</p>
+  <div class="seg" role="group" aria-label="Model">
+    <button type="button" data-model="habitat" aria-pressed="true">A · Habitat harvester</button>
+    <button type="button" data-model="organ" aria-pressed="false">B · Artificial organ</button>
+  </div>
+  <div class="tog">
+    <label><input type="checkbox" id="spin"> Auto-rotate</label>
+    <label><input type="checkbox" id="xray"> See-through parts</label>
+  </div>
+  <h2>Layers</h2>
+  <div id="layers"></div>
+  <h2>Part</h2>
+  <div id="info"><span class="path">Hover or tap a part</span>Every part carries its own description inside the model file.</div>
+  <h2>Download this model</h2>
+  <div class="row" id="downloads"></div>
+  <div class="row" style="margin-top:8px"><a href="#" id="shot" role="button">Save PNG of this view</a></div>
+  <h2>Opens in</h2>
+  <p class="sub" style="margin:0">Blender, Unity, Unreal, Godot, three.js, Windows 3D Viewer, KeyShot, Fusion, any slicer (STL).</p>
+</aside>
+<div id="status">Loading…</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const MODELS = {
+  habitat: { file: 'models/eel-habitat-harvester', cam: [2.0, 2.25, 3.9], target: [-0.05, 1.0, 0.05] },
+  organ: { file: 'models/artificial-electric-organ', cam: [0.05, 0.2, 0.3], target: [0.0, 0.025, -0.005] },
+};
+const params = new URLSearchParams(location.search);
+if (params.get('ui') === '0') document.body.classList.add('noui');
+
+const host = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+host.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0f1216);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.005, 100);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+scene.add(sun, sun.target);
+scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x2a2420, 0.5));
+const ground = new THREE.Mesh(new THREE.CircleGeometry(1, 96), new THREE.ShadowMaterial({ opacity: 0.35 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(1, 20, 0x2b333d, 0x1d232a);
+scene.add(grid);
+
+const loader = new GLTFLoader();
+const cache = {};
+let current = null, currentKey = null, ready = false;
+const transparentMats = [];
+
+function describe(obj) {
+  const names = [];
+  let desc = null, o = obj;
+  while (o && o !== current) {
+    if (o.name) names.unshift(o.name.replace(/_/g, ' '));
+    if (!desc && o.userData && o.userData.description) desc = o.userData.description;
+    o = o.parent;
+  }
+  return { title: names[names.length - 1] || 'Part', path: names.slice(0, -1).join(' › '), desc };
+}
+
+function prepare(root) {
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.material = o.material.clone();
+    o.userData.baseEmissive = o.material.emissive.clone();
+    const t = o.material.transparent;
+    o.material.userData.wasTransparent = t;
+    o.castShadow = !t;
+    o.receiveShadow = !t;
+    if (t) { o.material.depthWrite = false; transparentMats.push(o.material); }
+  });
+}
+
+function frameScene(key, root) {
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const span = Math.max(size.x, size.z) * 1.6;
+  ground.scale.setScalar(span);
+  grid.scale.setScalar(span * 1.25);
+  ground.position.y = grid.position.y = box.min.y - 0.0005;
+  const m = MODELS[key];
+  controls.target.fromArray(m.target);
+  const back = Math.max(1, 1.5 / camera.aspect);   // tall phone screens need more distance
+  camera.position.fromArray(m.cam).sub(controls.target).multiplyScalar(back).add(controls.target);
+  const d = size.length();
+  camera.near = d / 2000; camera.far = d * 40; camera.updateProjectionMatrix();
+  controls.minDistance = d * 0.05; controls.maxDistance = d * 6;
+  sun.position.set(box.max.x + d * 0.6, box.max.y + d * 1.2, box.max.z + d * 0.8);
+  sun.target.position.copy(box.getCenter(new THREE.Vector3()));
+  const c = sun.shadow.camera;
+  c.left = c.bottom = -d; c.right = c.top = d; c.near = 0.01 * d; c.far = 4 * d;
+  c.updateProjectionMatrix();
+  sun.shadow.bias = -0.0002;
+  controls.update();
+}
+
+function buildLayers(root) {
+  const host = document.getElementById('layers');
+  host.innerHTML = '';
+  for (const child of root.children) {
+    const label = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = child.visible;
+    box.addEventListener('change', () => { child.visible = box.checked; });
+    label.append(box, document.createTextNode(' ' + child.name.replace(/_/g, ' ')));
+    host.appendChild(label);
+  }
+  const dl = document.getElementById('downloads');
+  dl.innerHTML = '';
+  const f = MODELS[currentKey].file;
+  for (const [ext, label] of [['.glb', 'GLB'], ['.obj', 'OBJ'], ['.mtl', 'MTL'], ['.stl', 'STL']]) {
+    const a = document.createElement('a');
+    a.href = f + ext; a.download = ''; a.textContent = label;
+    dl.appendChild(a);
+  }
+}
+
+async function setModel(key) {
+  ready = false;
+  document.getElementById('status').textContent = 'Loading…';
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.model === key)));
+  if (current) scene.remove(current);
+  if (!cache[key]) {
+    const gltf = await loader.loadAsync(MODELS[key].file + '.glb');
+    prepare(gltf.scene);
+    cache[key] = gltf.scene;
+  }
+  current = cache[key];
+  currentKey = key;
+  scene.add(current);
+  frameScene(key, current);
+  buildLayers(current);
+  applyXray();
+  let tris = 0, meshes = 0;
+  current.traverse(o => { if (o.isMesh) { meshes++; tris += o.geometry.index.count / 3; } });
+  document.getElementById('status').textContent = `${meshes} parts · ${tris.toLocaleString()} triangles`;
+  const u = new URL(location.href); u.searchParams.set('model', key); history.replaceState(null, '', u);
+  ready = true;
+}
+
+function capture(w = 1600, h = 900) {
+  const size = renderer.getSize(new THREE.Vector2()), pr = renderer.getPixelRatio();
+  renderer.setPixelRatio(1); renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/png');
+  renderer.setPixelRatio(pr); renderer.setSize(size.x, size.y);
+  camera.aspect = size.x / size.y; camera.updateProjectionMatrix();
+  return url;
+}
+
+function applyXray() {
+  const on = document.getElementById('xray').checked;
+  if (!current) return;
+  current.traverse(o => {
+    if (!o.isMesh) return;
+    const n = o.name.toLowerCase() + ' ' + (o.parent ? o.parent.name.toLowerCase() : '');
+    if (/cabinet|plinth|pedestal|enclosure|frame|door/.test(n) && !o.material.userData.wasTransparent) {
+      o.material.transparent = on; o.material.opacity = on ? 0.25 : 1; o.material.depthWrite = !on;
+      o.material.needsUpdate = true;
+    }
+  });
+}
+
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setModel(b.dataset.model)));
+document.getElementById('spin').addEventListener('change', e => { controls.autoRotate = e.target.checked; });
+document.getElementById('xray').addEventListener('change', applyXray);
+document.getElementById('shot').addEventListener('click', e => {
+  e.preventDefault();
+  const a = document.createElement('a');
+  a.href = capture(1920, 1080); a.download = `${currentKey}-render.png`; a.click();
+});
+document.getElementById('hide').addEventListener('click', () => {
+  const c = document.body.classList.toggle('collapsed');
+  document.getElementById('hide').textContent = c ? 'Show panel' : 'Hide panel';
+});
+
+const ray = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let hovered = null;
+function pick(ev) {
+  if (!current) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(pointer, camera);
+  const hits = ray.intersectObject(current, true).filter(h => {
+    let o = h.object; while (o) { if (!o.visible) return false; o = o.parent; }
+    const m = h.object.material;
+    return !(m.userData.wasTransparent && m.opacity < 0.5);
+  });
+  const obj = hits.length ? hits[0].object : null;
+  if (obj === hovered) return;
+  if (hovered) hovered.material.emissive.copy(hovered.userData.baseEmissive);
+  hovered = obj;
+  const info = document.getElementById('info');
+  if (!obj) return;
+  obj.material.emissive.set(0x5a4310);
+  const d = describe(obj);
+  info.innerHTML = '';
+  const p = document.createElement('span'); p.className = 'path'; p.textContent = d.path;
+  const b = document.createElement('b'); b.textContent = d.title;
+  info.append(p, b, document.createTextNode(d.desc || ''));
+}
+renderer.domElement.addEventListener('pointermove', pick);
+renderer.domElement.addEventListener('pointerdown', pick);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+
+if (params.get('spin') === '1') { controls.autoRotate = true; document.getElementById('spin').checked = true; }
+window.__VIEWER = {
+  get ready() { return ready; }, get model() { return currentKey; }, setModel,
+  layers: () => current ? current.children.map(c => c.name) : [],
+  view: (cam, target) => { camera.position.fromArray(cam); controls.target.fromArray(target); controls.update(); },
+  capture,
+  setLayer: (name, on) => { const c = current.children.find(x => x.name === name); if (c) c.visible = on; },
+};
+setModel(params.get('model') === 'organ' ? 'organ' : 'habitat');
+</script>
+</body>
+</html>
