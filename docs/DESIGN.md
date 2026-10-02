@@ -73,7 +73,7 @@ For scale, a phone charge is about 15 Wh, or 54 kJ. At the typical rate, one eel
 
 ### Extra effort for the eel: negligible by design
 
-The harvester draws about 0.4 W, briefly, from a ~300 W pulse, so it adds about 0.1% to the eel's load. The welfare rule (§5) caps this at 5%, and a commissioning test checks it (§4.7).
+Mid-tank, the harvester draws about 0.4–0.7 W, briefly, from a ~300 W pulse, so it adds about 0.1–0.2% to the eel's load. When the eel fires right beside a plate it can reach ~5 W, about 2%. The welfare rule (§5) caps this at 5%, and a commissioning test checks it (§4.7).
 
 ## 4. Part A: passive habitat harvester
 
@@ -111,7 +111,7 @@ The harvester draws about 0.4 W, briefly, from a ~300 W pulse, so it adds about 
 - **Six-input polyphase diode bridge** (12 diodes, ≥1 kV). Each plate has one diode to the + rail and one to the − rail. The rails therefore always carry the largest plate-to-plate difference, whatever the polarity and whichever two plates see it. No switching logic is needed.
 - **Clamp:** a varistor (MOV) plus a TVS diode at ~150 V, for the rare pulse when the eel touches a guard right next to a plate.
 - **Catch capacitor:** 47 µF / 250 V film. It smooths each 2 ms spike. Its time constant with the ~240 Ω plate source is about 11 ms, so charge builds up across a volley.
-- **Converter:** a buck converter accepting 6–150 V input, ~2 W peak. It wakes when the capacitor reaches 10 V and then runs *fractional open-circuit MPPT* (maximum power point tracking): it holds its input at about half the open-circuit plate voltage. That is the matched load from §3 that extracts the most energy from each pulse. It sleeps again between volleys, drawing well under 1 µW.
+- **Converter:** a buck converter accepting 6–150 V input, ~5 W peak. A feeding volley fired beside a plate averages ~3.4 W for a fraction of a second; anything above the rating is shed by the clamp. It wakes when the capacitor reaches 10 V and then runs *fractional open-circuit MPPT* (maximum power point tracking): it holds its input at about half the open-circuit plate voltage. That is the matched load from §3 that extracts the most energy from each pulse. It sleeps again between volleys, drawing well under 1 µW.
 - Note that the catch capacitor can never charge above the plate voltage. A start threshold set higher than typical pulses (10–30 V) would never fire, which is why the wake threshold is low.
 
 ### 4.4 Storage: the leakage trap
@@ -170,6 +170,23 @@ Monitor alert rules (starting points for the vet to tune):
 2. **No DC into the water.** With no eel present, measure the current through every plate lead. It must be zero within instrument resolution.
 3. **Isolation.** The harvester floats: no connection to mains earth. Check insulation from every lead to the enclosure at 1 kV.
 4. **Field calibration.** Log a week of plate voltages, then refine the energy budget in §3 with real numbers.
+
+### 4.8 Simulated discharges (what the animation shows)
+
+`tools/build_models.py` turns this section into numbers for every discharge in the animated model:
+
+- **Eel.** A 1.65 m rig with 24 joints follows a closed swimming path at ~0.18 m/s. It speeds up to strike and slows to surface. A travelling body wave runs faster than the eel swims.
+- **Field.** The eel is a current dipole: +1 A at the head end of the organ, −1 A at the tail, in water with σ = 0.01 S/m. The four glass walls, the floor and the water surface are insulating, so each source is mirrored in all six (first-order method of images).
+- **Plates.** Each plate's voltage is the field's potential averaged over a 5 × 5 grid on its face. The bridge conducts the most-positive and most-negative plates. The energy per pulse is (ΔV − 1.4 V)² / (4 × 240 Ω) × 2 ms.
+
+| Discharge | Eel position | Conducting pair | ΔV | Per pulse | Pulses | Collected | Added load |
+|---|---|---|---|---|---|---|---|
+| Probing doublet | over the hide, mid-tank | E2 + / E6 − | 26.5 V | 1.3 mJ | 2 | 2.6 mJ | 0.2% |
+| Feeding strike | beside the back-wall plates | E5 + / E2 − | 71.4 V | 10.2 mJ | 70 | 714 mJ | 1.7% |
+| Probing doublet | head near end wall E1 | E1 + / E6 − | 51.2 V | 5.2 mJ | 2 | 10.3 mJ | 0.9% |
+| Sensing pulses (~10 V) | cruising | none | 0.7 V | 0 | — | 0 | 0% |
+
+The table shows how much **position** matters. The same eel collects about 8× more per pulse when it fires beside a plate than when it fires mid-tank. A feeding strike right beside the plates, as in this example, is close to the best case. A typical day, with most pulses mid-tank, stays around 0.1 J. The animation also stretches each 2 ms pulse into a visible flash and slows the energy dots in the leads; the numbers above use the real timings.
 
 ## 5. Rules built into the machine
 

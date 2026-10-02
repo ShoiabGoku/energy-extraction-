@@ -4,43 +4,100 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Eel Energy Machine</title>
-<meta name="description" content="3D viewer for a passive electric-eel habitat harvester and an eel-inspired artificial electric organ.">
+<meta name="description" content="Animated 3D design of a passive electric-eel habitat harvester and an eel-inspired artificial electric organ, with live panels that explain every step.">
 <style>
   :root {
-    --bg: #0f1216; --panel: rgba(20, 24, 30, 0.92); --line: #2a313b; --text: #e8ebef;
-    --muted: #9aa4b1; --accent: #f2b33d; --accent-ink: #1d1404; --ok: #57c486;
+    --bg: #0f1216; --panel: rgba(17, 21, 27, 0.92); --line: #2a313b; --text: #e8ebef; --muted: #9aa4b1;
+    --accent: #f2b33d; --accent-ink: #1d1404; --plus: #ff6a3d; --minus: #5b95ff; --ok: #57c486; --dim: #5d6672;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
-  #view { position: fixed; inset: 0; }
-  #panel { position: fixed; top: 16px; left: 16px; width: 320px; max-height: calc(100% - 32px); overflow: auto;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; backdrop-filter: blur(6px); }
-  h1 { font-size: 17px; margin: 0 0 2px; font-weight: 600; }
-  .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
-  .seg { display: flex; gap: 6px; margin-bottom: 14px; }
-  .seg button { flex: 1; padding: 8px 6px; border-radius: 8px; border: 1px solid var(--line); background: transparent;
-    color: var(--text); cursor: pointer; font: inherit; font-size: 12.5px; }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-  h2 { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
-  #layers label { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; font-size: 13px; }
-  #layers input { accent-color: var(--accent); }
-  #info { border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-height: 74px; font-size: 13px; }
-  #info b { display: block; margin-bottom: 4px; }
-  #info .path { color: var(--muted); font-size: 11.5px; display: block; margin-bottom: 4px; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #view { position: fixed; inset: 0; z-index: 0; }
+  #topbar, .panel, #transport { z-index: 2; }
+  #view canvas { display: block; }
+  .panel, #topbar, #transport, #layersPop { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    backdrop-filter: blur(6px); }
+  #topbar { position: fixed; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px; flex-wrap: wrap; }
+  #topbar h1 { font-size: 16px; margin: 0; font-weight: 650; }
+  #topbar .sub { color: var(--muted); font-size: 12.5px; }
+  .brand { display: flex; flex-direction: column; margin-right: auto; min-width: 0; }
+  .seg { display: flex; gap: 4px; }
+  button { font: inherit; color: var(--text); }
+  .seg button, .btn { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent;
+    cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+  .seg button[aria-pressed="true"], .btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
+  .panel { position: fixed; top: 76px; bottom: 112px; width: clamp(250px, 22vw, 316px); overflow: auto; padding: 12px 14px; }
+  @media (max-width: 1250px) { #topbar .sub { display: none; } }
+  #steps { left: 12px; }
+  #instr { right: 12px; }
+  .panel h2 { font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; font-weight: 650; }
+  #stepList { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  #stepList li { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px 8px 34px; position: relative;
+    opacity: .55; transition: opacity .2s, border-color .2s, background .2s; }
+  #stepList li .n { position: absolute; left: 9px; top: 8px; width: 18px; height: 18px; border-radius: 50%;
+    border: 1px solid var(--dim); font-size: 11px; display: grid; place-items: center; color: var(--muted); }
+  #stepList li b { display: block; font-size: 13.5px; }
+  #stepList li p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+  #stepList li .live { display: block; margin-top: 4px; font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; min-height: 1em; }
+  #stepList li.active { opacity: 1; border-color: var(--accent); background: rgba(242, 179, 61, .08); }
+  #stepList li.active .n { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
+  .lbl { font-size: 11.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+  .hint { font-size: 11.5px; color: var(--muted); }
+  .big { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .bar { height: 6px; border-radius: 3px; background: #222831; overflow: hidden; margin-top: 4px; position: relative; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  #scope { width: 100%; height: 130px; display: block; margin-top: 4px; border-radius: 6px; background: #0a0d11; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  .prow { display: grid; grid-template-columns: 24px 1fr 58px 18px; align-items: center; gap: 6px; font-size: 12px;
+    font-variant-numeric: tabular-nums; margin: 3px 0; }
+  .track { height: 8px; background: #1b2028; border-radius: 4px; position: relative; overflow: hidden; }
+  .track::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #3a434f; }
+  .track i { position: absolute; top: 0; bottom: 0; }
+  .pv { text-align: right; color: var(--muted); }
+  .tag { font-weight: 700; text-align: center; }
+  #log { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; color: var(--muted); display: grid; gap: 3px; }
+  #log li b { color: var(--text); font-weight: 600; }
+  .note { font-size: 12px; color: var(--muted); margin: 6px 2px 0; }
+  #transport { position: fixed; left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; display: grid;
+    grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: center; }
+  #play { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--accent); background: var(--accent);
+    color: var(--accent-ink); font-size: 15px; cursor: pointer; }
+  .scrub { position: relative; height: 30px; }
+  .scrub input { width: 100%; margin: 0; position: absolute; bottom: 0; accent-color: var(--accent); }
+  .markers { position: absolute; left: 7px; right: 7px; top: 0; height: 12px; }
+  .markers span { position: absolute; top: 0; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; }
+  .tctl { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .tctl .seg button { padding: 4px 8px; }
+  #time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 92px; text-align: right; }
+  #caption { grid-column: 1 / -1; font-size: 13.5px; min-height: 1.4em; }
+  #caption .slow { color: var(--accent); font-weight: 650; margin-right: 6px; }
+  #layersPop { position: fixed; top: 76px; right: 12px; width: 300px; padding: 12px 14px; z-index: 5; max-height: calc(100% - 200px); overflow: auto; }
+  #layersPop label { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 2px 0; cursor: pointer; }
+  #layersPop input { accent-color: var(--accent); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .row a { color: var(--accent); text-decoration: none; font-size: 12.5px; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
-  .row a:hover { border-color: var(--accent); }
-  .tog { display: flex; gap: 14px; font-size: 13px; }
-  .tog label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
-  #status { position: fixed; right: 16px; bottom: 14px; color: var(--muted); font-size: 12px; }
-  #hide { position: fixed; top: 16px; right: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
-    border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12.5px; }
-  body.noui #panel, body.noui #status, body.noui #hide { display: none; }
-  body.collapsed #panel { display: none; }
-  @media (max-width: 640px) {
-    #panel { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 46%; border-radius: 12px 12px 0 0; }
-    #status { display: none; }
+  #tip { position: fixed; pointer-events: none; max-width: 300px; background: rgba(10, 12, 16, .95); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; font-size: 12.5px; z-index: 9; }
+  #tip b { display: block; margin-bottom: 2px; }
+  #tip small { color: var(--muted); display: block; margin-bottom: 3px; }
+  .slider { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin: 6px 0; }
+  .slider input { flex: 1; accent-color: var(--accent); }
+  .facts { margin: 4px 0 0; padding-left: 16px; font-size: 12.5px; color: var(--muted); }
+  body.nopanels .panel { display: none; }
+  body.noui #topbar, body.noui .panel, body.noui #transport, body.noui #layersPop { display: none; }
+  @media (max-width: 960px) {
+    html, body { overflow: auto; height: auto; }
+    #view { position: relative; height: 56vh; }
+    #topbar { position: sticky; top: 0; left: 0; right: 0; border-radius: 0; z-index: 4; }
+    #transport { position: sticky; bottom: 0; left: 0; right: 0; border-radius: 0; z-index: 4; }
+    .panel { position: static; width: auto; margin: 8px; overflow: visible; }
+    #layersPop { top: 64px; left: 8px; right: 8px; width: auto; }
+    #topbar .sub { display: none; }
   }
 </style>
 <script type="importmap">
@@ -51,30 +108,48 @@
 </script>
 </head>
 <body>
-<div id="view"></div>
-<button id="hide" type="button">Hide panel</button>
-<aside id="panel">
-  <h1>Eel energy machine</h1>
-  <p class="sub">Collect only the pulses the eel fires anyway, and use that energy for the eel. For real power, copy the eel instead.</p>
+<header id="topbar">
+  <div class="brand"><h1>Eel energy machine</h1><span class="sub">Collect only the pulses the eel fires anyway, and use that energy for the eel. For real power, copy the eel.</span></div>
   <div class="seg" role="group" aria-label="Model">
     <button type="button" data-model="habitat" aria-pressed="true">A · Habitat harvester</button>
     <button type="button" data-model="organ" aria-pressed="false">B · Artificial organ</button>
   </div>
-  <div class="tog">
-    <label><input type="checkbox" id="spin"> Auto-rotate</label>
-    <label><input type="checkbox" id="xray"> See-through parts</label>
-  </div>
-  <h2>Layers</h2>
-  <div id="layers"></div>
-  <h2>Part</h2>
-  <div id="info"><span class="path">Hover or tap a part</span>Every part carries its own description inside the model file.</div>
-  <h2>Download this model</h2>
-  <div class="row" id="downloads"></div>
-  <div class="row" style="margin-top:8px"><a href="#" id="shot" role="button">Save PNG of this view</a></div>
-  <h2>Opens in</h2>
-  <p class="sub" style="margin:0">Blender, Unity, Unreal, Godot, three.js, Windows 3D Viewer, KeyShot, Fusion, any slicer (STL).</p>
+  <button type="button" class="btn" id="layersBtn" aria-expanded="false">Layers &amp; files</button>
+  <button type="button" class="btn" id="panelsBtn">Hide panels</button>
+</header>
+<div id="view"></div>
+<aside class="panel" id="steps" aria-live="polite">
+  <h2 id="stepsTitle">How it's happening</h2>
+  <ol id="stepList"></ol>
 </aside>
-<div id="status">Loading…</div>
+<aside class="panel" id="instr">
+  <h2>Live instruments</h2>
+  <div id="instrBody"></div>
+</aside>
+<footer id="transport">
+  <button type="button" id="play" aria-label="Pause">❚❚</button>
+  <div class="scrub"><div class="markers" id="markers"></div><input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Animation time"></div>
+  <div class="tctl">
+    <span id="time">0.0 s</span>
+    <div class="seg" role="group" aria-label="Speed" id="speeds">
+      <button type="button" data-speed="0.25" aria-pressed="false">¼×</button>
+      <button type="button" data-speed="0.5" aria-pressed="false">½×</button>
+      <button type="button" data-speed="1" aria-pressed="true">1×</button>
+      <button type="button" data-speed="2" aria-pressed="false">2×</button>
+    </div>
+    <label id="slowLbl" title="Play discharges at a third of the speed"><input type="checkbox" id="slowmo" checked> Slow discharges</label>
+  </div>
+  <div id="caption"></div>
+</footer>
+<section id="layersPop" hidden>
+  <h2 style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Layers</h2>
+  <div id="layers"></div>
+  <h2 style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px">Download this model</h2>
+  <div class="row" id="downloads"></div>
+  <div class="row"><a href="#" id="shot" role="button">Save PNG of this view</a></div>
+  <p class="note">The GLB carries the animation, so it plays in Blender, Unity, Unreal, Godot, three.js and Windows 3D Viewer. OBJ and STL hold one frozen moment.</p>
+</section>
+<div id="tip" hidden></div>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -82,69 +157,112 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const MODELS = {
-  habitat: { file: 'models/eel-habitat-harvester', cam: [2.0, 2.25, 3.9], target: [-0.05, 1.0, 0.05] },
-  organ: { file: 'models/artificial-electric-organ', cam: [0.05, 0.2, 0.3], target: [0.0, 0.025, -0.005] },
+  habitat: { file: 'models/eel-habitat-harvester', timeline: 'models/eel-habitat-harvester.timeline.json',
+             cam: [0.55, 2.35, 4.3], target: [0.2, 1.05, 0.1], fit: 1.85 },
+  organ: { file: 'models/artificial-electric-organ', cam: [0.05, 0.2, 0.3], target: [0.0, 0.03, -0.005], fit: 0.19 },
 };
+const STEPS = {
+  habitat: [
+    { key: 'sense', title: 'Eel swims and senses', body: 'Weak ~10 V pulses map its surroundings. At the plates they are under 1 V, below the bridge’s 1.4 V diode drop, so nothing is harvested.' },
+    { key: 'discharge', title: 'It fires', body: 'About 6,000 electrocytes switch on in series: ~600 V and ~1 A for 2 ms per pulse.' },
+    { key: 'field', title: 'Current spreads through the water', body: 'Head +, tail −. The glowing lines are the field; the glass walls keep it inside the tank.' },
+    { key: 'plates', title: 'Two plates pick it up', body: 'The pair with the largest voltage difference conducts (red +, blue −), whichever way the eel points.' },
+    { key: 'bridge', title: 'Bridge and catch capacitor', body: '12 diodes pass either polarity. A 47 µF capacitor catches each spike; the converter holds it at half the voltage, the matched load.' },
+    { key: 'store', title: 'Banked', body: 'The converter tops up the low-leakage supercapacitor.' },
+    { key: 'loads', title: 'Put to the right use', body: 'The beacon warns keepers the water is live, the monitor logs the event, and the display refreshes when there is surplus.' },
+  ],
+  organ: [
+    { title: 'Two gels, two salt levels', body: 'High-salt gel (coral) sits next to low-salt gel (blue): a stored salt gradient, like the two sides of an electrocyte.' },
+    { title: 'Na⁺ goes one way', body: 'The purple cation-selective membrane lets only positive sodium ions through, toward +x.' },
+    { title: 'Cl⁻ goes the other way', body: 'The amber anion-selective membrane lets only negative chloride ions through, toward −x.' },
+    { title: 'Both make one current', body: 'Positive charge moving right and negative charge moving left are the same current: about 0.18 V per cell.' },
+    { title: 'Stack them, power an implant', body: '20 cells in series give ~3.6 V, enough for a low-power implant through a boost converter. No eel needed.' },
+  ],
+};
+const MARK_COLORS = { probe: '#ff6a3d', feed: '#ff6a3d', breath: '#5b95ff', food: '#57c486', display: '#f2b33d' };
 const params = new URLSearchParams(location.search);
 if (params.get('ui') === '0') document.body.classList.add('noui');
+const $ = id => document.getElementById(id);
+let cur = null, ready = false, playing = true, speed = 1, scopeClock = 0;
+const scopeBuf = [];
 
-const host = document.getElementById('view');
+// ---------------------------------------------------------------- renderer and scene
+const host = $('view');
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 host.appendChild(renderer.domElement);
-
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0f1216);
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-
-const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.005, 100);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(40, 1, 0.005, 100);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-
 const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-scene.add(sun, sun.target);
-scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x2a2420, 0.5));
+scene.add(sun, sun.target, new THREE.HemisphereLight(0xdfe8f2, 0x2a2420, 0.5));
+const flashLight = new THREE.PointLight(0xffc35a, 0, 2.2, 1.6);
+scene.add(flashLight);
 const ground = new THREE.Mesh(new THREE.CircleGeometry(1, 96), new THREE.ShadowMaterial({ opacity: 0.35 }));
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
-scene.add(ground);
 const grid = new THREE.GridHelper(1, 20, 0x2b333d, 0x1d232a);
-scene.add(grid);
+scene.add(ground, grid);
 
-const loader = new GLTFLoader();
-const cache = {};
-let current = null, currentKey = null, ready = false;
-const transparentMats = [];
-
-function describe(obj) {
-  const names = [];
-  let desc = null, o = obj;
-  while (o && o !== current) {
-    if (o.name) names.unshift(o.name.replace(/_/g, ' '));
-    if (!desc && o.userData && o.userData.description) desc = o.userData.description;
-    o = o.parent;
-  }
-  return { title: names[names.length - 1] || 'Part', path: names.slice(0, -1).join(' › '), desc };
+let lastSize = '';
+function resize() {
+  const w = host.clientWidth, h = host.clientHeight;
+  if (`${w}x${h}` === lastSize) return;
+  lastSize = `${w}x${h}`;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  if (cur) fitCamera();
 }
 
-function prepare(root) {
+// Keep the model inside the part of the view the panels leave uncovered.
+function fitCamera() {
+  const w = host.clientWidth, h = host.clientHeight, desktop = innerWidth > 960;
+  const side = desktop && !document.body.classList.contains('nopanels') ? $('steps').getBoundingClientRect().right + 12 : 0;
+  const effW = Math.max(160, w - 2 * side), effH = Math.max(160, h - (desktop ? 190 : 0));
+  const half = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const ang = Math.min(Math.atan(Math.tan(half) * effW / h), Math.atan(Math.tan(half) * effH / h));
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  camera.position.copy(controls.target).addScaledVector(dir, MODELS[cur ? cur.key : 'habitat'].fit / Math.sin(ang));
+  controls.update();
+}
+new ResizeObserver(resize).observe(host);
+resize();
+
+// ---------------------------------------------------------------- loading
+const loader = new GLTFLoader();
+const cache = {};
+
+async function load(key) {
+  if (cache[key]) return cache[key];
+  const gltf = await loader.loadAsync(MODELS[key].file + '.glb');
+  const root = gltf.scene;
   root.traverse(o => {
     if (!o.isMesh) return;
     o.material = o.material.clone();
     o.userData.baseEmissive = o.material.emissive.clone();
-    const t = o.material.transparent;
+    const t = o.material.transparent, glow = /glow|packet|flash/.test(o.material.name);
     o.material.userData.wasTransparent = t;
-    o.castShadow = !t;
-    o.receiveShadow = !t;
-    if (t) { o.material.depthWrite = false; transparentMats.push(o.material); }
+    o.castShadow = !t && !glow;
+    o.receiveShadow = !t && !glow;
+    if (t) o.material.depthWrite = false;
+    if (o.isSkinnedMesh) o.frustumCulled = false;
   });
+  const mixer = new THREE.AnimationMixer(root);
+  const clip = gltf.animations[0];
+  const action = mixer.clipAction(clip);
+  action.play();
+  const tl = MODELS[key].timeline ? await (await fetch(MODELS[key].timeline)).json() : null;
+  return (cache[key] = { key, root, mixer, action, period: clip.duration, tl, loops: 0,
+                         mid: root.getObjectByName('eel_joint_12') });
 }
 
 function frameScene(key, root) {
@@ -156,63 +274,274 @@ function frameScene(key, root) {
   ground.position.y = grid.position.y = box.min.y - 0.0005;
   const m = MODELS[key];
   controls.target.fromArray(m.target);
-  const back = Math.max(1, 1.5 / camera.aspect);   // tall phone screens need more distance
-  camera.position.fromArray(m.cam).sub(controls.target).multiplyScalar(back).add(controls.target);
+  camera.position.fromArray(m.cam);
+  fitCamera();
   const d = size.length();
   camera.near = d / 2000; camera.far = d * 40; camera.updateProjectionMatrix();
-  controls.minDistance = d * 0.05; controls.maxDistance = d * 6;
+  controls.minDistance = d * 0.04; controls.maxDistance = d * 6;
   sun.position.set(box.max.x + d * 0.6, box.max.y + d * 1.2, box.max.z + d * 0.8);
   sun.target.position.copy(box.getCenter(new THREE.Vector3()));
   const c = sun.shadow.camera;
   c.left = c.bottom = -d; c.right = c.top = d; c.near = 0.01 * d; c.far = 4 * d;
   c.updateProjectionMatrix();
   sun.shadow.bias = -0.0002;
+  flashLight.distance = d * 0.6;
   controls.update();
-}
-
-function buildLayers(root) {
-  const host = document.getElementById('layers');
-  host.innerHTML = '';
-  for (const child of root.children) {
-    const label = document.createElement('label');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = child.visible;
-    box.addEventListener('change', () => { child.visible = box.checked; });
-    label.append(box, document.createTextNode(' ' + child.name.replace(/_/g, ' ')));
-    host.appendChild(label);
-  }
-  const dl = document.getElementById('downloads');
-  dl.innerHTML = '';
-  const f = MODELS[currentKey].file;
-  for (const [ext, label] of [['.glb', 'GLB'], ['.obj', 'OBJ'], ['.mtl', 'MTL'], ['.stl', 'STL']]) {
-    const a = document.createElement('a');
-    a.href = f + ext; a.download = ''; a.textContent = label;
-    dl.appendChild(a);
-  }
 }
 
 async function setModel(key) {
   ready = false;
-  document.getElementById('status').textContent = 'Loading…';
-  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.model === key)));
-  if (current) scene.remove(current);
-  if (!cache[key]) {
-    const gltf = await loader.loadAsync(MODELS[key].file + '.glb');
-    prepare(gltf.scene);
-    cache[key] = gltf.scene;
-  }
-  current = cache[key];
-  currentKey = key;
-  scene.add(current);
-  frameScene(key, current);
-  buildLayers(current);
-  applyXray();
-  let tris = 0, meshes = 0;
-  current.traverse(o => { if (o.isMesh) { meshes++; tris += o.geometry.index.count / 3; } });
-  document.getElementById('status').textContent = `${meshes} parts · ${tris.toLocaleString()} triangles`;
+  document.querySelectorAll('[data-model]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.model === key)));
+  if (cur) scene.remove(cur.root);
+  cur = await load(key);
+  scene.add(cur.root);
+  frameScene(key, cur.root);
+  buildPanels(key);
+  buildLayers();
+  seek(0);
   const u = new URL(location.href); u.searchParams.set('model', key); history.replaceState(null, '', u);
   ready = true;
+}
+
+// ---------------------------------------------------------------- panels
+function buildPanels(key) {
+  $('stepsTitle').textContent = key === 'habitat' ? 'How it’s happening' : 'How the gel battery works';
+  $('slowLbl').hidden = key !== 'habitat';
+  $('stepList').innerHTML = STEPS[key].map((s, i) =>
+    `<li data-i="${i}"><span class="n">${i + 1}</span><b>${s.title}</b><p>${s.body}</p><span class="live"></span></li>`).join('');
+  const tl = cur.tl;
+  if (key === 'habitat') {
+    $('instrBody').innerHTML = `
+      <div class="card"><div class="lbl">Oscilloscope <span>last 4 s</span></div><canvas id="scope"></canvas>
+        <div class="legend"><span><i class="sw" style="background:#f2b33d"></i>Eel organ, 0–900 V</span>
+        <span><i class="sw" style="background:#5ad1c4"></i>Plate pair ΔV, 0–80 V</span>
+        <span><i class="sw" style="background:#56606c"></i>1.4 V diode threshold</span></div></div>
+      <div class="card"><div class="lbl">Plate voltages <span id="plateWhen">last discharge</span></div><div id="plates">${
+        tl.plates.map((p, i) => `<div class="prow"><span>${p}</span><span class="track"><i id="pb${i}"></i></span><span class="pv" id="pv${i}">–</span><span class="tag" id="pt${i}"></span></div>`).join('')}</div></div>
+      <div class="card grid2">
+        <div><div class="lbl">Catch capacitor</div><div class="big" id="capV">0 V</div><div class="bar"><i id="capBar"></i></div></div>
+        <div><div class="lbl">Collected this loop</div><div class="big" id="loopE">0 mJ</div><div class="hint" id="perPulse">&nbsp;</div></div>
+        <div><div class="lbl">Supercapacitor</div><div class="big" id="scE">3.000 J</div><div class="hint" id="scV">&nbsp;</div></div>
+        <div><div class="lbl">Added load on eel</div><div class="big" id="loadPct">0 %</div><div class="bar"><i id="loadBar"></i></div><div class="hint">welfare limit 5 %</div></div>
+      </div>
+      <div class="card"><div class="lbl">Event log</div><ul id="log"></ul></div>
+      <p class="note">A typical real day collects ~${tl.constants.typical_day_J} J, about a thousand years to charge one phone. This ${tl.period.toFixed(0)} s loop packs a day’s highlights together, and pulses fired right beside a plate (like the feeding strike) collect ~8× more than mid-tank ones. Dots in the leads are slowed so you can follow them; real current is instant.</p>`;
+    $('markers').innerHTML = tl.markers.map(m =>
+      `<span title="${m.label}" style="left:${(m.t / tl.period) * 100}%;background:${MARK_COLORS[m.kind] || '#999'}"></span>`).join('');
+  } else {
+    $('instrBody').innerHTML = `
+      <div class="card"><div class="lbl">Stack calculator</div>
+        <label class="slider">Cells <input type="range" id="cells" min="1" max="700" value="20"><b id="cellsN">20</b></label>
+        <div class="grid2"><div><div class="lbl">Open-circuit voltage</div><div class="big" id="voc">3.6 V</div></div>
+        <div><div class="lbl">Stack length</div><div class="big" id="slen">15 cm</div></div></div>
+        <p class="hint" id="cellsNote"></p></div>
+      <div class="card"><div class="lbl">One cell, four layers</div><ul class="facts">
+        <li>High-salt gel, 3 mm</li><li>Cation membrane (purple), 0.8 mm</li><li>Low-salt gel, 3 mm</li><li>Anion membrane (amber), 0.8 mm</li></ul></div>
+      <p class="note">Schroeder et al. (2017) stacked 612 cells (2,449 gels) to reach 110 V. No animal is involved.</p>`;
+    $('markers').innerHTML = '';
+    const upd = () => {
+      const n = +$('cells').value, v = n * 0.18;
+      $('cellsN').textContent = n;
+      $('voc').textContent = v < 10 ? v.toFixed(2) + ' V' : v.toFixed(0) + ' V';
+      $('slen').textContent = n * 7.6 < 1000 ? (n * 0.76).toFixed(1) + ' cm' : (n * 0.0076).toFixed(2) + ' m';
+      $('cellsNote').textContent = v < 1.5 ? 'Below what most electronics need, even with a boost converter.'
+        : v < 6 ? 'Enough for a low-power implant through a boost converter.'
+        : v < 60 ? 'Enough for small sensors and indicator LEDs.' : 'Approaching the 110 V record stack.';
+    };
+    $('cells').addEventListener('input', upd);
+    upd();
+  }
+  scopeBuf.length = 0;
+}
+
+const stepEls = () => [...document.querySelectorAll('#stepList li')];
+
+function wrapD(t, t0, P) { let d = t - t0; if (d < 0) d += P; return d; }
+
+function habitatState(t) {
+  const tl = cur.tl, P = tl.period;
+  let ev = null, d = Infinity;
+  for (const e of tl.events) { const dd = wrapD(t, e.t0, P); if (dd < d) { d = dd; ev = e; } }
+  const active = {};
+  for (const [k, [a, b]] of Object.entries(ev.stages)) active[k] = d >= a && d <= b;
+  let flash = false, inDis = false;
+  for (const e of tl.events) {
+    const dd = wrapD(t + 0.1, e.t0, P) - 0.1;
+    if (dd >= -0.1 && dd <= e.vis + 0.3) inDis = true;
+    if (e.flashes.some(([a, b]) => dd >= a && dd <= b)) flash = true;
+  }
+  active.sense = !['discharge', 'plates', 'bridge', 'store'].some(k => active[k]);
+  return { ev, d, active, flash, inDis };
+}
+
+function series(name, t) {
+  const s = cur.tl.series, i = Math.min(Math.floor(t / 0.05), s.t.length - 2), f = (t - s.t[i]) / 0.05;
+  return s[name][i] * (1 - f) + s[name][i + 1] * f;
+}
+
+function fmtV(v) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + ' V'; }
+
+let lastLogT = -1;
+function updateHabitat(t) {
+  const tl = cur.tl, c = tl.constants, st = habitatState(t), ev = st.ev;
+  const names = tl.plates, lives = {};
+  const lvHz = series('lv_hz', t);
+  lives.sense = `${lvHz.toFixed(0)} sensing pulses/s · plates see ~${c.lv_plate_dV.toFixed(2)} V`;
+  lives.discharge = `${ev.label}: ${ev.pulses} pulses at ${ev.rate}/s`;
+  lives.field = `~${c.water_W} W into the water during each pulse`;
+  lives.plates = `${names[ev.plus]} ${fmtV(ev.plates_V[ev.plus])} / ${names[ev.minus]} ${fmtV(ev.plates_V[ev.minus])} → ΔV ${ev.dV.toFixed(1)} V`;
+  lives.bridge = `${ev.mJ_pulse.toFixed(2)} mJ per pulse at ${ev.power_W.toFixed(2)} W`;
+  lives.store = `+${ev.mJ_stored.toFixed(1)} mJ stored from this event`;
+  lives.loads = st.active.loads ? 'Beacon flashing · event logged' : 'Waiting for the next discharge';
+  stepEls().forEach((li, i) => {
+    const k = STEPS.habitat[i].key, on = !!st.active[k];
+    li.classList.toggle('active', on);
+    li.querySelector('.live').textContent = on || k === 'sense' ? lives[k] : '';
+  });
+  const recent = st.d < ev.vis + 12;
+  ev.plates_V.forEach((v, i) => {
+    const bar = $('pb' + i), w = Math.min(Math.abs(v) / 50, 1) * 50;
+    bar.style.left = v >= 0 ? '50%' : (50 - w) + '%';
+    bar.style.width = w + '%';
+    bar.style.background = i === ev.plus ? 'var(--plus)' : i === ev.minus ? 'var(--minus)' : '#56606c';
+    bar.style.opacity = recent ? 1 : 0.45;
+    $('pv' + i).textContent = fmtV(v);
+    const tag = $('pt' + i);
+    tag.textContent = i === ev.plus ? '+' : i === ev.minus ? '−' : '';
+    tag.style.color = i === ev.plus ? 'var(--plus)' : 'var(--minus)';
+  });
+  $('plateWhen').textContent = `${ev.label.split(':')[0]}, ${st.d.toFixed(1)} s ago`;
+  const cap = series('cap_V', t);
+  $('capV').textContent = cap.toFixed(1) + ' V';
+  $('capBar').style.width = Math.min(cap / 40, 1) * 100 + '%';
+  $('loopE').textContent = series('harvest_mJ', t).toFixed(1) + ' mJ';
+  $('perPulse').textContent = `last: ${ev.mJ_pulse.toFixed(2)} mJ / pulse`;
+  const lastStored = tl.series.stored_mJ[tl.series.stored_mJ.length - 1];
+  const scJ = c.supercap_start_J + (cur.loops * lastStored + series('stored_mJ', t)) / 1000;
+  $('scE').textContent = scJ.toFixed(3) + ' J';
+  $('scV').textContent = Math.sqrt(2 * scJ / c.supercap_F).toFixed(3) + ' V of 5 V max';
+  $('loadPct').textContent = (st.active.discharge ? ev.load_pct : 0).toFixed(2) + ' %';
+  $('loadBar').style.width = (st.active.discharge ? Math.min(ev.load_pct / 5, 1) * 100 : 0) + '%';
+  const cap_ = tl.captions.find(x => t >= x.t0 && t < x.t1) || tl.captions[0];
+  $('caption').innerHTML = (st.inDis && $('slowmo').checked ? '<span class="slow">Slow motion</span>' : '') + cap_.text;
+  for (const e of tl.log) {
+    const crossed = lastLogT <= t ? (e.t > lastLogT && e.t <= t) : (e.t > lastLogT || e.t <= t);
+    if (lastLogT >= 0 && crossed) addLog(e);
+  }
+  lastLogT = t;
+  const lvBlip = (t * lvHz) % 1 < 0.12;
+  scopeBuf.push({ c: scopeClock, org: st.flash ? c.organ_V : lvBlip ? c.lv_V : 0, dv: st.flash ? ev.dV : lvBlip ? c.lv_plate_dV : 0 });
+  while (scopeBuf.length && scopeBuf[0].c < scopeClock - 4) scopeBuf.shift();
+  drawScope();
+  if (cur.mid) cur.mid.getWorldPosition(flashLight.position);
+  flashLight.intensity = st.flash ? 4.5 : flashLight.intensity * 0.8;
+  return st;
+}
+
+function addLog(e) {
+  const ul = $('log');
+  if (!ul) return;
+  const li = document.createElement('li');
+  li.innerHTML = `<b>${e.t.toFixed(1)} s</b> ${e.text}`;
+  ul.prepend(li);
+  while (ul.children.length > 6) ul.lastChild.remove();
+}
+
+function rebuildLog(t) {
+  const ul = $('log');
+  if (!ul) return;
+  ul.innerHTML = '';
+  cur.tl.log.filter(e => e.t <= t).forEach(addLog);
+  lastLogT = t;
+}
+
+function drawScope() {
+  const cv = $('scope');
+  if (!cv) return;
+  const dpr = Math.min(devicePixelRatio, 2), W = cv.clientWidth * dpr, H = cv.clientHeight * dpr;
+  if (!W || !H) return;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cv.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  g.strokeStyle = '#1d232b'; g.lineWidth = 1;
+  for (let i = 1; i < 4; i++) { g.beginPath(); g.moveTo(0, H * i / 4); g.lineTo(W, H * i / 4); g.stroke(); }
+  const x = s => W - (scopeClock - s.c) / 4 * W;
+  const lane = (key, max, top, h, color) => {
+    g.strokeStyle = color; g.lineWidth = 1.5 * dpr; g.beginPath();
+    scopeBuf.forEach((s, i) => { const y = top + h - Math.min(s[key] / max, 1) * h; i ? g.lineTo(x(s), y) : g.moveTo(x(s), y); });
+    g.stroke();
+  };
+  lane('org', 900, 4 * dpr, H / 2 - 8 * dpr, '#f2b33d');
+  const thr = H - 4 * dpr - (1.4 / 80) * (H / 2 - 8 * dpr);
+  g.setLineDash([4 * dpr, 4 * dpr]); g.strokeStyle = '#56606c'; g.beginPath(); g.moveTo(0, thr); g.lineTo(W, thr); g.stroke(); g.setLineDash([]);
+  lane('dv', 80, H / 2 + 4 * dpr, H / 2 - 8 * dpr, '#5ad1c4');
+}
+
+function updateOrgan() {
+  const i = Math.floor(scopeClock / 2.8) % STEPS.organ.length;
+  stepEls().forEach((li, k) => li.classList.toggle('active', k === i));
+  $('caption').textContent = STEPS.organ[i].body;
+}
+
+// ---------------------------------------------------------------- transport
+function seek(t) {
+  cur.action.time = Math.max(0, Math.min(t, cur.period - 1e-4));
+  cur.mixer.update(0);
+  scopeBuf.length = 0;
+  if (cur.tl) rebuildLog(cur.action.time);
+}
+function setPlaying(p) {
+  playing = p;
+  $('play').textContent = p ? '❚❚' : '▶';
+  $('play').setAttribute('aria-label', p ? 'Pause' : 'Play');
+}
+$('play').addEventListener('click', () => setPlaying(!playing));
+$('scrub').addEventListener('input', e => seek(+e.target.value * cur.period));
+document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => {
+  speed = +b.dataset.speed;
+  document.querySelectorAll('[data-speed]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+}));
+addEventListener('keydown', e => {
+  if (e.code === 'Space' && !['INPUT', 'BUTTON'].includes(document.activeElement.tagName)) { e.preventDefault(); setPlaying(!playing); }
+});
+document.querySelectorAll('[data-model]').forEach(b => b.addEventListener('click', () => setModel(b.dataset.model)));
+$('panelsBtn').addEventListener('click', () => {
+  const off = document.body.classList.toggle('nopanels');
+  $('panelsBtn').textContent = off ? 'Show panels' : 'Hide panels';
+  fitCamera();
+});
+$('layersBtn').addEventListener('click', () => {
+  const pop = $('layersPop'), open = pop.hidden;
+  pop.hidden = !open;
+  $('layersBtn').setAttribute('aria-expanded', String(open));
+  $('layersBtn').classList.toggle('on', open);
+});
+
+function buildLayers() {
+  const box = $('layers');
+  box.innerHTML = '';
+  const add = (label, objs) => {
+    const l = document.createElement('label'), c = document.createElement('input');
+    c.type = 'checkbox'; c.checked = true;
+    c.addEventListener('change', () => objs.forEach(o => { o.visible = c.checked; }));
+    l.append(c, document.createTextNode(' ' + label));
+    box.appendChild(l);
+  };
+  for (const child of cur.root.children) {
+    if (/rig/i.test(child.name)) continue;
+    add(child.name.replace(/_/g, ' '), [child]);
+  }
+  const fields = [];
+  cur.root.traverse(o => { if (/^Field_lines/.test(o.name)) fields.push(o); });
+  if (fields.length) add('Discharge field lines', fields);
+  const dl = $('downloads');
+  dl.innerHTML = '';
+  const f = MODELS[cur.key].file;
+  for (const [ext, label] of [['.glb', 'GLB (animated)'], ['.obj', 'OBJ'], ['.mtl', 'MTL'], ['.stl', 'STL']]) {
+    const a = document.createElement('a');
+    a.href = f + ext; a.download = ''; a.textContent = label;
+    dl.appendChild(a);
+  }
 }
 
 function capture(w = 1600, h = 900) {
@@ -225,76 +554,92 @@ function capture(w = 1600, h = 900) {
   camera.aspect = size.x / size.y; camera.updateProjectionMatrix();
   return url;
 }
-
-function applyXray() {
-  const on = document.getElementById('xray').checked;
-  if (!current) return;
-  current.traverse(o => {
-    if (!o.isMesh) return;
-    const n = o.name.toLowerCase() + ' ' + (o.parent ? o.parent.name.toLowerCase() : '');
-    if (/cabinet|plinth|pedestal|enclosure|frame|door/.test(n) && !o.material.userData.wasTransparent) {
-      o.material.transparent = on; o.material.opacity = on ? 0.25 : 1; o.material.depthWrite = !on;
-      o.material.needsUpdate = true;
-    }
-  });
-}
-
-document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setModel(b.dataset.model)));
-document.getElementById('spin').addEventListener('change', e => { controls.autoRotate = e.target.checked; });
-document.getElementById('xray').addEventListener('change', applyXray);
-document.getElementById('shot').addEventListener('click', e => {
+$('shot').addEventListener('click', e => {
   e.preventDefault();
   const a = document.createElement('a');
-  a.href = capture(1920, 1080); a.download = `${currentKey}-render.png`; a.click();
-});
-document.getElementById('hide').addEventListener('click', () => {
-  const c = document.body.classList.toggle('collapsed');
-  document.getElementById('hide').textContent = c ? 'Show panel' : 'Hide panel';
+  a.href = capture(1920, 1080); a.download = `${cur.key}-render.png`; a.click();
 });
 
-const ray = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
+// ---------------------------------------------------------------- hover descriptions
+const ray = new THREE.Raycaster(), pointer = new THREE.Vector2(), tip = $('tip');
 let hovered = null;
+function describe(obj) {
+  const names = [];
+  let desc = null, o = obj;
+  while (o && o !== cur.root) {
+    if (o.name && !/^eel_joint/.test(o.name)) names.unshift(o.name.replace(/_/g, ' ').replace(/ \d+$/, ''));
+    if (!desc && o.userData && o.userData.description) desc = o.userData.description;
+    o = o.parent;
+  }
+  return { title: names[names.length - 1] || 'Part', path: names.slice(0, -1).join(' › '), desc };
+}
 function pick(ev) {
-  if (!current) return;
+  if (!cur) return;
   const r = renderer.domElement.getBoundingClientRect();
   pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(pointer, camera);
-  const hits = ray.intersectObject(current, true).filter(h => {
+  cur.root.traverse(o => { if (o.isSkinnedMesh) o.computeBoundingSphere(); });
+  const hits = ray.intersectObject(cur.root, true).filter(h => {
     let o = h.object; while (o) { if (!o.visible) return false; o = o.parent; }
     const m = h.object.material;
     return !(m.userData.wasTransparent && m.opacity < 0.5);
   });
   const obj = hits.length ? hits[0].object : null;
-  if (obj === hovered) return;
-  if (hovered) hovered.material.emissive.copy(hovered.userData.baseEmissive);
+  if (hovered && hovered !== obj) hovered.material.emissive.copy(hovered.userData.baseEmissive);
   hovered = obj;
-  const info = document.getElementById('info');
-  if (!obj) return;
-  obj.material.emissive.set(0x5a4310);
+  if (!obj) { tip.hidden = true; return; }
+  if (!/glow|packet|flash/.test(obj.material.name)) obj.material.emissive.set(0x5a4310);
   const d = describe(obj);
-  info.innerHTML = '';
-  const p = document.createElement('span'); p.className = 'path'; p.textContent = d.path;
+  tip.innerHTML = '';
+  const s = document.createElement('small'); s.textContent = d.path;
   const b = document.createElement('b'); b.textContent = d.title;
-  info.append(p, b, document.createTextNode(d.desc || ''));
+  tip.append(s, b, document.createTextNode(d.desc || ''));
+  tip.hidden = false;
+  tip.style.left = Math.min(ev.clientX + 14, innerWidth - 320) + 'px';
+  tip.style.top = Math.min(ev.clientY + 14, innerHeight - 140) + 'px';
 }
 renderer.domElement.addEventListener('pointermove', pick);
 renderer.domElement.addEventListener('pointerdown', pick);
+renderer.domElement.addEventListener('pointerleave', () => { tip.hidden = true; });
 
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+// ---------------------------------------------------------------- main loop
+const clock = new THREE.Clock();
+let dragging = false;
+$('scrub').addEventListener('pointerdown', () => { dragging = true; });
+addEventListener('pointerup', () => { dragging = false; });
+function step(dt, force = false) {
+  if (cur && ready) {
+    let rate = (playing || force) && !dragging ? speed : 0;
+    if (rate && cur.tl && $('slowmo').checked && habitatState(cur.action.time).inDis) rate /= 3;
+    const before = cur.action.time;
+    cur.mixer.update(dt * rate);
+    const t = cur.action.time;
+    if (rate && t < before - cur.period / 2) cur.loops++;
+    scopeClock += dt * rate;
+    if (cur.tl) updateHabitat(t); else updateOrgan();
+    if (!dragging) $('scrub').value = (t / cur.period).toFixed(4);
+    $('time').textContent = `${t.toFixed(1)} / ${cur.period.toFixed(1)} s`;
+  }
+}
+renderer.setAnimationLoop(() => {
+  step(Math.min(clock.getDelta(), 0.1));
+  controls.update();
+  renderer.render(scene, camera);
 });
 
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
-
-if (params.get('spin') === '1') { controls.autoRotate = true; document.getElementById('spin').checked = true; }
+if (params.get('play') === '0') setPlaying(false);
 window.__VIEWER = {
-  get ready() { return ready; }, get model() { return currentKey; }, setModel,
-  layers: () => current ? current.children.map(c => c.name) : [],
+  get ready() { return ready; }, get model() { return cur && cur.key; }, setModel, capture,
+  get time() { return cur.action.time; }, seek, play: setPlaying,
+  advance: (sec, fps = 60) => {   // deterministic playback for tests and screenshots
+    for (let i = 0, n = Math.round(sec * fps); i < n; i++) step(1 / fps, true);
+    controls.update(); renderer.render(scene, camera);
+    return cur.action.time;
+  },
   view: (cam, target) => { camera.position.fromArray(cam); controls.target.fromArray(target); controls.update(); },
-  capture,
-  setLayer: (name, on) => { const c = current.children.find(x => x.name === name); if (c) c.visible = on; },
+  state: () => cur.tl ? (({ ev, d, active, flash }) => ({ ev: ev.id, d, active, flash }))(habitatState(cur.action.time)) : null,
+  layers: () => cur.root.children.map(c => c.name),
+  node: name => { const o = cur.root.getObjectByName(name); return o && o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(4)); },
 };
 setModel(params.get('model') === 'organ' ? 'organ' : 'habitat');
 </script>
