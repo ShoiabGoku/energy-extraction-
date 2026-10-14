@@ -127,9 +127,10 @@ A good-quality 1 F supercapacitor at 5 V leaks a few microwatts on its own. That
 
 | Load | What it does | Power | Powered by |
 |---|---|---|---|
-| **Keeper shock alarm** | Amber beacon on the lid by the feeding hatch flashes after every high-voltage volley | ~3 mJ per 50 ms flash, ~0.1 J per event | **The volley itself**, through the catch capacitor. The shock powers its own warning |
+| **Keeper shock alarm** | Amber beacon on the lid by the feeding hatch flashes, and a piezo sounder chirps, after every high-voltage discharge | ~1.7 mJ per flash-and-chirp (20 ms LED strobe at 1.2 mJ + 50 ms piezo chirp at 0.5 mJ). The discharge pays for 2 to 12 of them | **The discharge itself**, through the catch capacitor. The number of flashes scales with the energy delivered; a weak doublet's minimum of two is topped up from the supercapacitor |
 | **Eel health monitor** | Logs water temperature, conductivity and every discharge (count, amplitude, timing). Alerts keepers by Bluetooth LE | ~25 µW average | **Its own 10-year lithium cell**; harvested energy only tops it up |
 | **Education display** | Large e-paper panel: energy collected today, the last pulse waveform, "years to charge a phone" | Holds its image at zero power; ~0.1–0.5 J per refresh | **Surplus only.** It refreshes when the eel has made enough, and the waiting is part of the lesson |
+| **Listening speaker** | On the display stand: plays the electrode signal through a bio-amplifier, so visitors hear the eel's sensing clicks and the buzz of a volley | ~0.5 W while playing | **Mains power.** Audio needs thousands of times more energy than the eel provides, so it does not pretend otherwise |
 
 Two deliberate decisions:
 
@@ -160,8 +161,9 @@ Monitor alert rules (starting points for the vet to tune):
 | 1 | Low-power MCU + Bluetooth LE radio | |
 | 1 | Temperature + conductivity probe, in a guard tube | |
 | 1 | Lithium primary cell for the monitor | AA Li-SOCl₂ |
-| 1 | Amber LED beacon | |
+| 1 | Amber LED beacon + piezo sounder | 3.2 kHz chirp, ~3 mA |
 | 1 | Large e-paper display on a stand | |
+| 1 | Bio-amplifier + small speaker, on the display stand | high-impedance input from the plate rails, mains powered |
 | 1 | IP-rated enclosure with clear lid, 9 cable glands, steel pedestal | |
 
 ### 4.7 Commissioning tests
@@ -187,6 +189,30 @@ Monitor alert rules (starting points for the vet to tune):
 | Sensing pulses (~10 V) | cruising | none | 0.7 V | 0 | — | 0 | 0% |
 
 The table shows how much **position** matters. The same eel collects about 8× more per pulse when it fires beside a plate than when it fires mid-tank. A feeding strike right beside the plates, as in this example, is close to the best case. A typical day, with most pulses mid-tank, stays around 0.1 J. The animation also stretches each 2 ms pulse into a visible flash and slows the energy dots in the leads; the numbers above use the real timings.
+
+### 4.9 Sound: only what you would really hear
+
+The discharge itself is **silent**. A few hundred volts spread through water makes no crackle, spark or hum, so the soundtrack has no sci-fi zap. Everything you hear has a real source:
+
+| Source | What it sounds like | Where it comes from |
+|---|---|---|
+| Filter pump | Low 100 Hz hum | Mains (50 Hz) magnetostriction in the pump motor |
+| Water | Gentle broadband flow, bubbles from the filter outflow | Bubbles ring at their Minnaert frequency, ≈ 3.26 / radius Hz (0.8–2.7 kHz for 1.2–4 mm bubbles) |
+| Food going in | A small splash and entry bubbles | Keeper dropping food through the hatch |
+| Breathing | Splash and a low gulp as the snout breaks the surface, then bubbles as the eel dives | Electric eels gulp air and release it from the gill openings |
+| Feeding strike | A low thud and slosh | Suction feeding |
+| Exhibit speaker | Quiet clicks 6–40 per second while cruising. Two sharp clicks for a doublet. A buzz for a volley, because the pulses arrive ~330 times a second | The plate signal through a bio-amplifier, the way researchers and aquariums listen to electric fish. A pulse heard nearer a plate is louder |
+| Alarm | 2 to 12 short 3.2 kHz chirps with the beacon | The piezo sounder in the beacon base |
+
+`tools/build_models.py` synthesises these from the same timeline as the animation:
+
+- `models/eel-habitat-harvester.soundtrack.wav` is a stereo mix for any video or 3D renderer. In Blender, add it to the timeline at frame 1; it loops with the animation.
+- `models/eel-habitat-harvester.sound-stems.wav` holds three channels (tank, speaker, alarm), which the viewer mixes and lets you mute separately.
+
+Two things the soundtrack deliberately leaves out:
+
+- **Converter coil whine.** A buck converter can whine during a burst, but at these power levels it would be inaudible from outside the enclosure.
+- **The gel battery (Part B).** It makes no sound at all.
 
 ## 5. Rules built into the machine
 

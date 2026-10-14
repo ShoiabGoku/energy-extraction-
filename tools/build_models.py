@@ -23,6 +23,7 @@ import json
 import math
 import os
 import struct
+import wave
 
 import numpy as np
 
@@ -608,6 +609,8 @@ LV_VOLTS = 10.0                # low-voltage sensing pulses
 SC_C, SC_E0 = 1.0, 3.0         # supercapacitor bank: 1 F, 3 J at the start of the loop
 PHONE_J = 15 * 3600.0
 TYPICAL_DAY_J = 0.14
+ALARM_UNIT_MJ = 1.7            # one 20 ms LED strobe (1.2 mJ) + one 50 ms piezo chirp (0.5 mJ)
+SR = 22050                     # soundtrack sample rate
 
 # Closed swimming loop for the head (front straight runs toward -x).
 # The loop starts just before the hide, so the feeding strike falls mid-loop.
@@ -938,6 +941,10 @@ def build_loads():
         cylinder(0.018, 1.02, 20).xform(T(DX, 0.525, DZ)),
         box((0.08, 0.05, 0.05), (DX, 1.06, DZ - 0.01)),
     ]), "display_black")
+    grille = [box((0.16, 0.08, 0.06), (DX, 0.90, DZ + 0.035))]
+    out["Listening speaker"] = (merge(grille), "display_black")
+    out["Speaker grille"] = (merge([box((0.13, 0.004, 0.004), (DX, 0.875 + 0.01 * i, DZ + 0.066)) for i in range(6)]),
+                             "screw_metal")
     P = DISPLAY_M
     out["Display frame"] = (box((0.46, 0.32, 0.02)).xform(P), "display_black")
     out["E-paper screen"] = (box((0.42, 0.28, 0.003), (0, 0, 0.0105)).xform(P), "epaper")
@@ -1083,8 +1090,10 @@ def scene_habitat():
                   mJ_stored=round(e_pulse * spec["pulses"] * ETA * 1e3, 2),
                   load_pct=round(100 * p_w / P_WATER, 3), organ_V=V_ORGAN,
                   head=[round(float(v), 3) for v in H], tail=[round(float(v), 3) for v in Tl])
+        ev["alarm_flashes"] = int(min(12, max(2, ev["mJ_stored"] // ALARM_UNIT_MJ)))
         ev["stages"] = {"discharge": [0, vis], "field": [0, vis], "plates": [0, vis + 0.25],
-                        "bridge": [0.3, vis + 1.6], "store": [0.9, vis + 2.4], "loads": [0.5, vis + spec["beacon"]]}
+                        "bridge": [0.3, vis + 1.6], "store": [0.9, vis + 2.4],
+                        "loads": [0.5, 0.75 + 0.5 * ev["alarm_flashes"]]}
         events.append(ev)
     feed = events[-1]
     t_refresh = feed["t0"] + feed["vis"] + 2.6
@@ -1183,11 +1192,12 @@ def scene_habitat():
         flow.append(n)
     beacon_w, led_w = [], []
     for ev in events:
-        for a in np.arange(0.5, ev["vis"] + ev["beacon"], 0.5):
-            beacon_w.append((ev["t0"] + a, ev["t0"] + a + 0.25))
+        for k in range(ev["alarm_flashes"]):
+            beacon_w.append((ev["t0"] + 0.5 + 0.5 * k, ev["t0"] + 0.75 + 0.5 * k))
         led_w += [(ev["t0"] + a, ev["t0"] + a + 0.15) for a in (0.6, 0.9, 1.2)]
     bn = Node("Beacon flash", sphere(0.034, 20, 12).xform(T(*BEACON_C)), "beacon_flash",
-              "The alarm flashes after every high-voltage discharge, powered by the discharge itself.",
+              "The alarm flashes and chirps after every high-voltage discharge, 2 to 12 times depending on "
+              "how much energy that discharge delivered.",
               stl=False, anim_only=True)
     ln = Node("Monitor LED flash", sphere(0.009, 12, 8).xform(T(*LED_C)), "led_flash",
               "The health monitor logs every discharge it detects.", stl=False, anim_only=True)
@@ -1268,19 +1278,26 @@ def scene_habitat():
         "Eel health monitor": ["Health monitor node", "Radio antenna", "Status LED", "Probe guard",
                                "Temperature + conductivity probe"],
         "Keeper shock alarm": ["Alarm beacon base", "Alarm beacon lens"],
-        "Education display": ["Display stand", "Display frame", "E-paper screen", "E-paper axes and history"],
+        "Education display": ["Display stand", "Display frame", "E-paper screen", "E-paper axes and history",
+                              "Listening speaker", "Speaker grille"],
     }
     gdesc = {
         "Eel health monitor": "Logs water temperature, conductivity and every discharge the plates detect; a change "
                               "in discharge pattern is an early sign of stress or illness. Runs on ~25 uW from its "
                               "own 10-year lithium cell, so it never depends on a sick eel discharging.",
-        "Keeper shock alarm": "Every high-voltage discharge flashes the beacon: tank is live, hands out. Powered by "
-                              "the very shock it warns about.",
+        "Keeper shock alarm": "After every high-voltage discharge the beacon flashes and a piezo sounder chirps: "
+                              "tank is live, hands out. Each flash-and-chirp costs ~1.7 mJ, so the discharge pays "
+                              "for 2 to 12 of them; a weak doublet's minimum is topped up from the supercapacitor.",
         "Education display": "E-paper panel: energy harvested today, the last pulse waveform, and how long one eel "
                              "would take to charge a phone (about a thousand years). It refreshes only when the "
                              "eel has made enough surplus energy.",
     }
-    load_nodes = [Node(g, children=[Node(p, lparts[p][0], lparts[p][1]) for p in pl], desc=gdesc[g])
+    pdesc = {
+        "Listening speaker": "Plays the electrode signal through a bio-amplifier, the way scientists and aquariums "
+                             "listen to electric fish: sensing pulses click, a volley buzzes at its pulse rate. It "
+                             "runs from mains power; audio needs far more energy than the eel provides.",
+    }
+    load_nodes = [Node(g, children=[Node(p, lparts[p][0], lparts[p][1], pdesc.get(p)) for p in pl], desc=gdesc[g])
                   for g, pl in groups.items()]
     load_nodes[2].children += [wa, wb, nb, fl]
     loads = Node("Loads (right purposes)", children=load_nodes)
@@ -1289,12 +1306,210 @@ def scene_habitat():
 
     # ---- timeline for the viewer's panels --------------------------------------------
     timeline = build_timeline(motion, events, t_drop, t_food, t_breath, t_refresh, plate_names, lv_dV, rest_t)
+    stems, sounds = build_soundtrack(period, events, t_drop, t_food, t_breath, lv_dV)
+    timeline["sounds"] = sounds
+    timeline["audio"] = dict(stems="models/eel-habitat-harvester.sound-stems.wav",
+                             mix="models/eel-habitat-harvester.soundtrack.wav", sample_rate=SR,
+                             channels=["tank", "speaker", "alarm"], pan=[0.0, 0.35, 0.55])
+    stats["stems"] = stems
     stats.update(loop_s=round(period, 2), eel_body_m=L_EEL,
                  events={ev["id"]: (plate_names[ev["plus"]], plate_names[ev["minus"]], ev["dV"], ev["mJ_pulse"],
                                     ev["mJ_event"], ev["field_lines"]) for ev in events},
                  lv_dV=round(lv_dV, 3))
     roots = [habitat, eel, rig, electrodes, cables, harvester, loads, energy]
     return roots, channels, timeline, stats
+
+
+def lv_rate(t, events, t_food):
+    """Sensing-pulse rate (per second): faster while probing or hunting."""
+    busy = sum(math.exp(-((t - c) / 1.6) ** 2) for c in (events[0]["t0"], events[1]["t0"], t_food))
+    return 6 + 34 * min(busy, 1.0)
+
+
+# --------------------------------------------------------------------------
+# Soundtrack: only what you would really hear
+# --------------------------------------------------------------------------
+# The discharge itself is silent: a few hundred volts spread through water does
+# not crackle. What a visitor hears is the tank (pump hum, water, bubbles,
+# splashes, the eel's gulp and strike), the exhibit speaker that plays the
+# electrode signal through a bio-amplifier, and the alarm's piezo chirp.
+
+def _place(buf, t0, sig):
+    """Add a sound at time t0, wrapping round the loop so it stays seamless."""
+    n = len(buf)
+    idx = (int(round(t0 * SR)) + np.arange(len(sig))) % n
+    np.add.at(buf, idx, sig)
+
+
+def _band_noise(n, rng, lo, hi, tilt=0.0):
+    """Band-limited noise shaped in the frequency domain; circular, so it loops cleanly."""
+    spec = np.fft.rfft(rng.standard_normal(n))
+    f = np.maximum(np.fft.rfftfreq(n, 1 / SR), 1.0)
+    shape = np.exp(-0.5 * (np.log(f / math.sqrt(lo * hi)) / (0.5 * math.log(hi / lo))) ** 2) * f ** (-tilt)
+    x = np.fft.irfft(spec * shape, n)
+    return x / max(np.sqrt(np.mean(x ** 2)), 1e-12)
+
+
+def _env(n, attack, decay):
+    t = np.arange(n) / SR
+    return (1 - np.exp(-t / attack)) * np.exp(-t / decay)
+
+
+def _bubble(radius, amp):
+    """Minnaert bubble: resonance 3.26/R Hz, damped, pitch rising as it lifts off."""
+    f0 = 3.26 / radius
+    tau = 1 / (math.pi * f0 * 0.045)
+    t = np.arange(int(6 * tau * SR)) / SR
+    f = f0 * (1 + 0.35 * t / tau)
+    return amp * np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / tau) * (1 - np.exp(-t / 0.0008))
+
+
+def _glide(f_start, f_end, dur, attack, decay, amp):
+    t = np.arange(int(dur * SR)) / SR
+    f = f_end + (f_start - f_end) * np.exp(-t / (dur / 3))
+    return amp * np.sin(2 * np.pi * np.cumsum(f) / SR) * _env(len(t), attack, decay)
+
+
+def _eod(width, amp):
+    """One electric organ discharge as the bio-amplifier hears it: a head-positive
+    half-sine pulse followed by the small undershoot of the amplifier's AC coupling."""
+    n = max(2, int(width * SR))
+    pos = np.sin(np.pi * np.arange(n) / n)
+    tail = -0.3 * np.exp(-np.arange(int(0.004 * SR)) / (0.0015 * SR))
+    return amp * np.concatenate([pos, tail])
+
+
+def _speaker_amp(volts):
+    """Bio-amplifier with log compression: louder plate signals sound louder, but stay in range."""
+    return 0.30 * math.log10(1 + volts / 0.5) / math.log10(1 + 80 / 0.5)
+
+
+def _bursts(flashes, gap=0.05):
+    out = []
+    for a, b in flashes:
+        if out and a - out[-1][1] < gap:
+            out[-1][1] = b
+        else:
+            out.append([a, b])
+    return out
+
+
+def build_soundtrack(period, events, t_drop, t_food, t_breath, lv_dV):
+    n = int(round(period * SR))
+    t = np.arange(n) / SR
+    rng = np.random.default_rng(11)
+    tank, spk, alarm = np.zeros(n), np.zeros(n), np.zeros(n)
+    sounds = []
+
+    def loopf(f):                              # whole cycles per loop: no click at the seam
+        return round(f * period) / period
+
+    # Tank: filter pump hum (mains 50 Hz -> 100 Hz magnetostriction), flowing water, outflow bubbles.
+    f_hum = loopf(100.0)
+    tank += 0.016 * np.sin(2 * np.pi * f_hum * t) + 0.008 * np.sin(4 * np.pi * f_hum * t) \
+        + 0.004 * np.sin(6 * np.pi * f_hum * t)
+    swell = 1 + 0.25 * np.sin(2 * np.pi * 3 * t / period) + 0.15 * np.sin(2 * np.pi * 7 * t / period + 1.0)
+    tank += 0.028 * _band_noise(n, rng, 150, 2500, tilt=0.5) * swell
+    for tb in np.cumsum(rng.exponential(1 / 2.0, size=int(period * 3))):
+        if tb < period:
+            _place(tank, tb, _bubble(rng.uniform(0.0012, 0.004), rng.uniform(0.016, 0.045)))
+    sounds.append(dict(t0=0.0, t1=round(period, 3), stem="tank", text="Filter pump hum, flowing water, bubbles"))
+
+    # Food drops in: a small splash and its entry bubbles.
+    splash = 0.10 * _band_noise(int(0.12 * SR), rng, 1500, 6000) * _env(int(0.12 * SR), 0.001, 0.02)
+    _place(tank, t_drop, splash)
+    _place(tank, t_drop + 0.01, _bubble(0.0035, 0.07))
+    _place(tank, t_drop + 0.05, _bubble(0.0018, 0.03))
+    sounds.append(dict(t0=round(t_drop - 0.05, 3), t1=round(t_drop + 0.7, 3), stem="tank",
+                       text="Plip: the food hits the water"))
+
+    # The eel breathes: snout breaks the surface, gulps, then exhales bubbles as it dives.
+    sp = 0.12 * _band_noise(int(0.25 * SR), rng, 300, 3000) * _env(int(0.25 * SR), 0.02, 0.09)
+    _place(tank, t_breath - 0.05, sp)
+    _place(tank, t_breath + 0.02, _glide(240, 170, 0.35, 0.004, 0.05, 0.16))
+    _place(tank, t_breath + 0.12, _glide(200, 150, 0.30, 0.004, 0.04, 0.10))
+    for k in range(7):
+        _place(tank, t_breath + 1.0 + 0.11 * k + rng.uniform(0, 0.05), _bubble(rng.uniform(0.002, 0.005),
+                                                                              rng.uniform(0.03, 0.06)))
+    sounds.append(dict(t0=round(t_breath - 0.1, 3), t1=round(t_breath + 0.6, 3), stem="tank",
+                       text="Gulp: the eel takes a breath at the surface"))
+    sounds.append(dict(t0=round(t_breath + 1.0, 3), t1=round(t_breath + 1.9, 3), stem="tank",
+                       text="Bubbles as it dives"))
+
+    # Feeding strike: the low thud of suction feeding, then the water sloshing.
+    _place(tank, t_food, _glide(95, 45, 0.35, 0.003, 0.07, 0.30))
+    slosh = 0.07 * _band_noise(int(0.4 * SR), rng, 100, 900) * _env(int(0.4 * SR), 0.01, 0.15)
+    _place(tank, t_food + 0.02, slosh)
+    sounds.append(dict(t0=round(t_food - 0.05, 3), t1=round(t_food + 0.45, 3), stem="tank",
+                       text="Thud: the suction strike on the food"))
+
+    # Exhibit speaker: amplifier hiss and a little mains hum, sensing clicks, then the discharges.
+    spk += 0.004 * _band_noise(n, rng, 200, 5000) + 0.003 * np.sin(2 * np.pi * loopf(50.0) * t) \
+        + 0.0015 * np.sin(2 * np.pi * loopf(150.0) * t)
+    lv = _eod(0.0015, _speaker_amp(lv_dV))
+    phase, tk = 0.0, 0.0
+    step = 1 / 200
+    while tk < period:
+        phase += lv_rate(tk, events, t_food) * step
+        if phase >= 1.0:
+            phase -= 1.0
+            _place(spk, tk + rng.uniform(0, step), lv * rng.uniform(0.85, 1.0))
+        tk += step
+    sounds.append(dict(t0=0.0, t1=round(period, 3), stem="speaker", kind="lv",
+                       text="Speaker: sensing clicks"))
+    for ev in events:
+        amp = _speaker_amp(ev["dV"])
+        if ev["kind"] == "probe":
+            for a, b in ev["flashes"]:
+                _place(spk, ev["t0"] + a, _eod(0.002, amp))
+            sounds.append(dict(t0=round(ev["t0"] - 0.02, 3), t1=round(ev["t0"] + ev["vis"] + 0.1, 3),
+                               stem="speaker", text=f"Speaker: two sharp clicks, the doublet ({ev['dV']:.0f} V at the plates)"))
+        else:
+            for a, b in _bursts(ev["flashes"]):
+                tp = ev["t0"] + a
+                while tp < ev["t0"] + b:
+                    x = (tp - ev["t0"] - a) / (b - a)
+                    _place(spk, tp, _eod(0.0018, amp * (1 - 0.15 * x)))
+                    tp += 1 / (ev["rate"] - 70 * x)
+            sounds.append(dict(t0=round(ev["t0"], 3), t1=round(ev["t0"] + ev["vis"], 3), stem="speaker",
+                               text=f"Speaker: the volley buzzes at its pulse rate, ~{ev['rate']} per second "
+                                    f"({ev['dV']:.0f} V at the plates)"))
+    spk = np.tanh(1.3 * spk) / math.tanh(1.3)          # the little amplifier clips softly
+
+    # Alarm: one piezo chirp with each beacon flash.
+    tc = np.arange(int(0.07 * SR)) / SR
+    chirp = (np.sin(2 * np.pi * 3200 * tc) + 0.3 * np.sin(2 * np.pi * 6400 * tc) + 0.15 * np.sin(2 * np.pi * 9600 * tc))
+    chirp *= 0.13 * np.minimum(1, np.minimum(tc / 0.004, (tc[-1] - tc) / 0.004))
+    for ev in events:
+        for k in range(ev["alarm_flashes"]):
+            _place(alarm, ev["t0"] + 0.5 + 0.5 * k, chirp)
+        sounds.append(dict(t0=round(ev["t0"] + 0.5, 3), t1=round(ev["t0"] + 0.6 + 0.5 * (ev["alarm_flashes"] - 1), 3),
+                           stem="alarm", text=f"Alarm: {ev['alarm_flashes']} chirps with the beacon"))
+
+    stems = np.stack([tank, spk, alarm], axis=1)
+    sounds.sort(key=lambda x: x["t0"])
+    return stems, sounds
+
+
+def write_wav(path, data):
+    pcm = (np.clip(data, -1, 1) * 32767).astype("<i2")
+    with wave.open(path, "wb") as w:
+        w.setnchannels(data.shape[1])
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(pcm.tobytes())
+
+
+def write_soundtrack(stems, pan):
+    """Stems (tank, speaker, alarm) for the viewer, and a stereo mix for any video or 3D renderer."""
+    ang = (np.asarray(pan) + 1) * math.pi / 4                  # equal-power panning
+    mix = np.stack([stems @ np.cos(ang), stems @ np.sin(ang)], axis=1)
+    g = 0.89 / np.max(np.abs(mix))
+    write_wav(os.path.join(OUT, "eel-habitat-harvester.sound-stems.wav"), stems * g)
+    write_wav(os.path.join(OUT, "eel-habitat-harvester.soundtrack.wav"), mix * g)
+    rms = np.sqrt(np.mean((stems * g) ** 2, axis=0))
+    print("   soundtrack: %.2f s, stem RMS tank %.3f / speaker %.3f / alarm %.3f, mix peak 0.89"
+          % (len(stems) / SR, *rms))
 
 
 def build_timeline(motion, events, t_drop, t_food, t_breath, t_refresh, plate_names, lv_dV, rest_t):
@@ -1330,8 +1545,7 @@ def build_timeline(motion, events, t_drop, t_food, t_breath, t_refresh, plate_na
         series["stored_mJ"].append(round(sum(ev["mJ_stored"] * ramp(t, ev["t0"] + 0.9, ev["t0"] + ev["vis"] + 2.4)
                                              for ev in events), 3))
         series["speed"].append(round(motion.speed(t), 3))
-        busy = sum(math.exp(-((t - c) / 1.6) ** 2) for c in (events[0]["t0"], events[1]["t0"], t_food))
-        series["lv_hz"].append(round(6 + 34 * min(busy, 1.0), 1))
+        series["lv_hz"].append(round(lv_rate(t, events, t_food), 1))
 
     captions = [
         dict(t0=0.0, text="Cruising and sensing with weak ~10 V pulses. They are far too weak to harvest."),
@@ -1733,6 +1947,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     roots, channels, timeline, stats = scene_habitat()
     export("eel-habitat-harvester", roots, "Passive eel habitat harvester", channels, "Swim and harvest (loop)")
+    write_soundtrack(stats.pop("stems"), timeline["audio"]["pan"])
     with open(os.path.join(OUT, "eel-habitat-harvester.timeline.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump(timeline, f, separators=(",", ":"))
     print("   ", stats)

@@ -35,11 +35,21 @@ For every discharge you can watch the energy's path:
 2. The **conducting pair of plates** glows: red for +, blue for −.
 3. **Energy dots** run along the two live leads into the harvester. Real current is instant; the dots are slowed so you can follow them.
 4. The **bridge, catch capacitor, converter and supercapacitor** light up in turn.
-5. The **alarm beacon** flashes, the **monitor LED** logs the event, and after the feeding strike the **e-paper display** refreshes with the new waveform.
+5. The **alarm beacon** flashes and chirps, 2 to 12 times depending on the energy delivered. The **monitor LED** logs the event, and after the feeding strike the **e-paper display** refreshes with the new waveform.
 
 The physics behind each frame comes from the same code that builds the model. The eel is treated as a head/tail current dipole in water of conductivity 0.01 S/m, and the six insulating tank walls are modelled as mirrors (the method of images). That gives each plate's voltage and, from those, the matched-load energy. All of it is saved in [`models/eel-habitat-harvester.timeline.json`](models/eel-habitat-harvester.timeline.json).
 
 Part B animates too: Na⁺ ions cross the cation membrane one way and Cl⁻ ions cross the anion membrane the other way, together making one current.
+
+## Sound: only what you would really hear
+
+The discharge itself is **silent**: a few hundred volts in water doesn't crackle. So the soundtrack holds only sounds with a real source, timed to the same events as the animation:
+
+- **The tank:** the filter pump's 100 Hz mains hum, flowing water and bubbles, the splash when food goes in, the gulp when the eel breathes at the surface, bubbles as it dives, and the thud of its suction strike.
+- **The exhibit speaker** on the display stand: it plays the plate signal through a bio-amplifier, the way researchers listen to electric fish. Cruising sounds like soft clicks, a doublet like two sharp clicks, and the feeding volley like a buzz at ~330 pulses a second. A discharge nearer a plate sounds louder. The speaker runs on mains power, since audio needs far more energy than an eel provides.
+- **The alarm:** 2 to 12 short piezo chirps with the beacon, depending on how much energy the discharge delivered.
+
+In the viewer, press **Sound on**. The Layers & files menu lets you mute the tank, the speaker or the alarm separately, and a **What you hear** card names each sound as it plays. For other programs, [`models/eel-habitat-harvester.soundtrack.wav`](models/eel-habitat-harvester.soundtrack.wav) is a stereo mix exactly one loop long. Part B makes no sound.
 
 ## The viewer and its panels
 
@@ -50,6 +60,7 @@ Open `index.html` through any static server, or enable GitHub Pages for this rep
 - **How it's happening.** Seven steps, from "Eel swims and senses" to "Put to the right use". Each one lights up while it is happening, with live numbers such as the conducting plates, ΔV, energy per pulse and energy stored.
 - **Live instruments.** An oscilloscope of the eel's voltage and the plate-pair ΔV against the 1.4 V diode threshold. Voltage bars for all six plates with the + and − pair marked. Gauges for the catch capacitor and supercapacitor, the energy collected this loop, and the added load on the eel against the 5% welfare limit. An event log.
 - **Transport.** Play/pause, a scrubber with event markers, speeds from ¼× to 2×, and automatic slow motion during discharges. A caption narrates what is happening.
+- **Sound.** A Sound button, mute switches per source, and a live "What you hear" card.
 - **Part B panels.** A five-step explanation of the gel battery and a stack calculator: drag the number of cells and see the voltage and stack length.
 - **Hover any part** to read its description. Use **Layers & files** to toggle parts and download any format.
 
@@ -76,12 +87,13 @@ GLB and OBJ use **metres, +Y up**. The habitat model is 3.7 × 1.9 × 1.9 m incl
 - **Blender:** File → Import → glTF 2.0 → `models/eel-habitat-harvester.glb`, then press play in the Timeline. The water and glass are transparent; the field lines, plate glows and beacon glow.
 - **Windows:** double-click the `.glb` file. 3D Viewer plays the animation.
 - **Unity / Unreal / Godot:** import the `.glb` and play its one clip, "Swim and harvest (loop)".
+- **Sound in any of them:** add `models/eel-habitat-harvester.soundtrack.wav` at frame 1. It is exactly one loop long, so it repeats in step with the animation.
 - **Browser:** run `python -m http.server` in this folder and open `http://localhost:8000`.
 - **Print or CAD:** use the `.stl` file.
 
 ## Regenerating the models
 
-The models, the animation and the timeline are all generated from code. Every dimension, the swimming path and the electrical constants in [`tools/build_models.py`](tools/build_models.py) can be changed and rebuilt:
+The models, the animation, the timeline and the soundtrack are all generated from code. Every dimension, the swimming path and the electrical constants in [`tools/build_models.py`](tools/build_models.py) can be changed and rebuilt:
 
 ```bash
 pip install numpy

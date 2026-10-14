@@ -88,6 +88,12 @@
   .slider { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin: 6px 0; }
   .slider input { flex: 1; accent-color: var(--accent); }
   .facts { margin: 4px 0 0; padding-left: 16px; font-size: 12.5px; color: var(--muted); }
+  #hear { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; font-size: 12.5px; }
+  #hear li { display: flex; gap: 6px; align-items: baseline; }
+  #hear li i { width: 8px; height: 8px; border-radius: 50%; flex: none; transform: translateY(1px); }
+  #hear li.muted { opacity: .45; text-decoration: line-through; }
+  #hear.off li { opacity: .5; }
+  #soundBtn.on::before { content: "\25CF "; color: var(--accent-ink); }
   body.nopanels .panel { display: none; }
   body.noui #topbar, body.noui .panel, body.noui #transport, body.noui #layersPop { display: none; }
   @media (max-width: 960px) {
@@ -114,6 +120,7 @@
     <button type="button" data-model="habitat" aria-pressed="true">A · Habitat harvester</button>
     <button type="button" data-model="organ" aria-pressed="false">B · Artificial organ</button>
   </div>
+  <button type="button" class="btn" id="soundBtn" aria-pressed="false" title="Play the sounds you would really hear">Sound off</button>
   <button type="button" class="btn" id="layersBtn" aria-expanded="false">Layers &amp; files</button>
   <button type="button" class="btn" id="panelsBtn">Hide panels</button>
 </header>
@@ -144,6 +151,14 @@
 <section id="layersPop" hidden>
   <h2 style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Layers</h2>
   <div id="layers"></div>
+  <h2 style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px">Sound</h2>
+  <div id="soundCtl">
+    <label><input type="checkbox" class="stem" data-i="0" checked> Tank: pump, water, splashes, gulp</label>
+    <label><input type="checkbox" class="stem" data-i="1" checked> Exhibit speaker: the eel's electrode signal</label>
+    <label><input type="checkbox" class="stem" data-i="2" checked> Alarm chirp</label>
+    <label class="slider">Volume <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8"></label>
+  </div>
+  <p class="note" id="soundNote">The discharge itself is silent: a few hundred volts in water makes no crackle. You hear the tank, the exhibit speaker playing the electrode signal (the way scientists listen to electric fish) and the alarm. In slow motion the sound slows too.</p>
   <h2 style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px">Download this model</h2>
   <div class="row" id="downloads"></div>
   <div class="row"><a href="#" id="shot" role="button">Save PNG of this view</a></div>
@@ -298,6 +313,9 @@ async function setModel(key) {
   frameScene(key, cur.root);
   buildPanels(key);
   buildLayers();
+  stopSrc();
+  $('soundCtl').hidden = !cur.tl;
+  $('soundNote').textContent = cur.tl ? SOUND_NOTE : 'Part B makes no sound: ions drifting through a gel are silent, so nothing plays here.';
   seek(0);
   const u = new URL(location.href); u.searchParams.set('model', key); history.replaceState(null, '', u);
   ready = true;
@@ -324,6 +342,7 @@ function buildPanels(key) {
         <div><div class="lbl">Supercapacitor</div><div class="big" id="scE">3.000 J</div><div class="hint" id="scV">&nbsp;</div></div>
         <div><div class="lbl">Added load on eel</div><div class="big" id="loadPct">0 %</div><div class="bar"><i id="loadBar"></i></div><div class="hint">welfare limit 5 %</div></div>
       </div>
+      <div class="card"><div class="lbl">What you hear <span id="hearState">sound off</span></div><ul id="hear"></ul></div>
       <div class="card"><div class="lbl">Event log</div><ul id="log"></ul></div>
       <p class="note">A typical real day collects ~${tl.constants.typical_day_J} J, about a thousand years to charge one phone. This ${tl.period.toFixed(0)} s loop packs a day’s highlights together, and pulses fired right beside a plate (like the feeding strike) collect ~8× more than mid-tank ones. Dots in the leads are slowed so you can follow them; real current is instant.</p>`;
     $('markers').innerHTML = tl.markers.map(m =>
@@ -424,6 +443,7 @@ function updateHabitat(t) {
   $('loadBar').style.width = (st.active.discharge ? Math.min(ev.load_pct / 5, 1) * 100 : 0) + '%';
   const cap_ = tl.captions.find(x => t >= x.t0 && t < x.t1) || tl.captions[0];
   $('caption').innerHTML = (st.inDis && $('slowmo').checked ? '<span class="slow">Slow motion</span>' : '') + cap_.text;
+  updateHear(t, lvHz);
   for (const e of tl.log) {
     const crossed = lastLogT <= t ? (e.t > lastLogT && e.t <= t) : (e.t > lastLogT || e.t <= t);
     if (lastLogT >= 0 && crossed) addLog(e);
@@ -483,12 +503,143 @@ function updateOrgan() {
   $('caption').textContent = STEPS.organ[i].body;
 }
 
+// ---------------------------------------------------------------- sound
+// One looping 3-channel file (tank, speaker, alarm) made from the same timeline as the
+// animation, played in step with it. Slow motion slows the sound like a slowed recording.
+const SOUND_NOTE = $('soundNote').textContent;
+const STEM_COLORS = ['#5ad1c4', '#f2b33d', '#ff6a3d'];
+const audio = { ctx: null, buf: null, src: null, split: null, gains: [], master: null, pos: 0, last: 0, rate: 1 };
+const soundPrefs = { on: false, vol: 0.8, stems: [true, true, true] };
+try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('eelSound') || '{}'), { on: false }); } catch (e) { /* storage blocked */ }
+function savePrefs() { try { localStorage.setItem('eelSound', JSON.stringify(soundPrefs)); } catch (e) { /* storage blocked */ } }
+
+async function ensureAudio() {
+  if (!audio.ctx) {
+    const ctx = audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    audio.master = ctx.createGain();
+    audio.master.connect(ctx.destination);
+    audio.split = ctx.createChannelSplitter(3);
+    const pans = cache.habitat && cache.habitat.tl ? cache.habitat.tl.audio.pan : [0, 0.35, 0.55];
+    pans.forEach((pan, i) => {
+      const g = ctx.createGain(), pn = ctx.createStereoPanner();
+      pn.pan.value = pan;
+      audio.split.connect(g, i);
+      g.connect(pn).connect(audio.master);
+      audio.gains.push(g);
+    });
+  }
+  if (!audio.buf) {
+    const url = (cache.habitat && cache.habitat.tl.audio.stems) || 'models/eel-habitat-harvester.sound-stems.wav';
+    audio.buf = await audio.ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+  }
+  applyGains();
+}
+function applyGains() {
+  if (!audio.ctx) return;
+  audio.master.gain.value = soundPrefs.vol;
+  audio.gains.forEach((g, i) => { g.gain.value = soundPrefs.stems[i] ? 1 : 0; });
+}
+function stopSrc() {
+  if (!audio.src) return;
+  try { audio.src.stop(); } catch (e) { /* already stopped */ }
+  audio.src.disconnect();
+  audio.src = null;
+}
+function restartAudio() {
+  stopSrc();
+  if (!soundPrefs.on || !audio.buf || !cur || !cur.tl) return;
+  const src = audio.src = audio.ctx.createBufferSource();
+  src.buffer = audio.buf;
+  src.loop = true;
+  src.playbackRate.value = Math.max(audio.rate, 0.01);
+  src.connect(audio.split);
+  audio.pos = cur.action.time % audio.buf.duration;
+  audio.last = audio.ctx.currentTime;
+  src.start(0, audio.pos);
+}
+function audioSync(t, rate) {
+  if (!soundPrefs.on || !audio.buf || !cur.tl) return;
+  const ctx = audio.ctx;
+  if (rate <= 0 || document.hidden) {
+    if (ctx.state === 'running') ctx.suspend();
+    audio.last = ctx.currentTime;
+    return;
+  }
+  if (ctx.state === 'suspended') { ctx.resume(); audio.last = ctx.currentTime; }
+  if (!audio.src) restartAudio();
+  const now = ctx.currentTime, P = audio.buf.duration;
+  audio.pos = (audio.pos + (now - audio.last) * audio.rate) % P;
+  audio.last = now;
+  if (Math.abs(rate - audio.rate) > 1e-3) {
+    audio.rate = rate;
+    audio.src.playbackRate.setValueAtTime(rate, now);
+  }
+  let d = Math.abs(audio.pos - t);
+  d = Math.min(d, P - d);
+  if (d > 0.15) restartAudio();                    // drifted (scrub, tab switch): jump back in step
+}
+async function setSound(on) {
+  soundPrefs.on = on;
+  const b = $('soundBtn');
+  b.textContent = on ? 'Sound on' : 'Sound off';
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', String(on));
+  if (!on) {
+    stopSrc();
+    if (audio.ctx) audio.ctx.suspend();
+    return;
+  }
+  try {
+    await ensureAudio();
+    await audio.ctx.resume();
+    restartAudio();
+  } catch (e) {
+    soundPrefs.on = false;
+    b.textContent = 'Sound unavailable';
+  }
+}
+$('soundBtn').addEventListener('click', () => setSound(!soundPrefs.on));
+document.querySelectorAll('.stem').forEach(c => {
+  c.checked = soundPrefs.stems[+c.dataset.i];
+  c.addEventListener('change', () => { soundPrefs.stems[+c.dataset.i] = c.checked; savePrefs(); applyGains(); });
+});
+$('vol').value = soundPrefs.vol;
+$('vol').addEventListener('input', e => { soundPrefs.vol = +e.target.value; savePrefs(); applyGains(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && audio.src) restartAudio(); });
+// If frames stop (hidden tab or pane), stop the sound too rather than let it run out of step.
+let lastFrameAt = 0;
+setInterval(() => {
+  if (audio.ctx && audio.ctx.state === 'running' && performance.now() - lastFrameAt > 400) audio.ctx.suspend();
+}, 250);
+
+let lastHear = '';
+function updateHear(t, lvHz) {
+  const ul = $('hear');
+  if (!ul) return;
+  const P = cur.tl.period, list = cur.tl.sounds;
+  const active = list.filter(x => (t >= x.t0 && t <= x.t1) || (x.t1 > P && t <= x.t1 - P));
+  const busySpeaker = active.some(x => x.stem === 'speaker' && x.kind !== 'lv');
+  const rows = active.filter(x => !(x.kind === 'lv' && busySpeaker)).map(x => {
+    const i = ['tank', 'speaker', 'alarm'].indexOf(x.stem);
+    const text = x.kind === 'lv' ? `Speaker: sensing clicks, ${lvHz.toFixed(0)} per second` : x.text;
+    return `<li class="${soundPrefs.stems[i] ? '' : 'muted'}"><i style="background:${STEM_COLORS[i]}"></i>${text}</li>`;
+  }).join('');
+  const state = soundPrefs.on ? 'playing' : 'sound off';
+  if (rows + state !== lastHear) {
+    ul.innerHTML = rows;
+    ul.classList.toggle('off', !soundPrefs.on);
+    $('hearState').textContent = state;
+    lastHear = rows + state;
+  }
+}
+
 // ---------------------------------------------------------------- transport
 function seek(t) {
   cur.action.time = Math.max(0, Math.min(t, cur.period - 1e-4));
   cur.mixer.update(0);
   scopeBuf.length = 0;
   if (cur.tl) rebuildLog(cur.action.time);
+  if (audio.src) restartAudio();
 }
 function setPlaying(p) {
   playing = p;
@@ -617,6 +768,7 @@ function step(dt, force = false) {
     if (rate && t < before - cur.period / 2) cur.loops++;
     scopeClock += dt * rate;
     if (cur.tl) updateHabitat(t); else updateOrgan();
+    if (!force) { audioSync(t, rate); lastFrameAt = performance.now(); }
     if (!dragging) $('scrub').value = (t / cur.period).toFixed(4);
     $('time').textContent = `${t.toFixed(1)} / ${cur.period.toFixed(1)} s`;
   }
@@ -639,6 +791,10 @@ window.__VIEWER = {
   view: (cam, target) => { camera.position.fromArray(cam); controls.target.fromArray(target); controls.update(); },
   state: () => cur.tl ? (({ ev, d, active, flash }) => ({ ev: ev.id, d, active, flash }))(habitatState(cur.action.time)) : null,
   layers: () => cur.root.children.map(c => c.name),
+  sound: () => ({ on: soundPrefs.on, ctx: audio.ctx && audio.ctx.state, loaded: !!audio.buf,
+                  channels: audio.buf && audio.buf.numberOfChannels, duration: audio.buf && audio.buf.duration,
+                  playing: !!audio.src, pos: audio.pos, rate: audio.rate }),
+  setSound,
   node: name => { const o = cur.root.getObjectByName(name); return o && o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(4)); },
 };
 setModel(params.get('model') === 'organ' ? 'organ' : 'habitat');
