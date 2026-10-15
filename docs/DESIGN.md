@@ -214,6 +214,26 @@ Two things the soundtrack deliberately leaves out:
 - **Converter coil whine.** A buck converter can whine during a burst, but at these power levels it would be inaudible from outside the enclosure.
 - **The gel battery (Part B).** It makes no sound at all.
 
+### 4.10 More than one eel
+
+The design works the same way with several eels, because each discharge is collected on its own. The animated model offers 1, 2 or 3 eels. Each extra eel has its own body length, path, food, breaths and discharges. Organ voltage and discharge current scale with body length, since a longer eel has more electrocytes in series.
+
+| Eel | Length | Organ | Discharge | Conducting pair | ΔV | Per pulse | Collected |
+|---|---|---|---|---|---|---|---|
+| A | 1.65 m | 600 V | Feeding strike beside the back plates (70 pulses) | E5 + / E2 − | 71.4 V | 10.2 mJ | 714 mJ |
+| B | 1.35 m | 491 V | Feeding strike under the hatch, mid-tank (50 pulses) | E5 + / E1 − | 19.7 V | 0.70 mJ | 35 mJ |
+| B | 1.35 m | 491 V | Doublet in mid-water | E3 + / E6 − | 21.4 V | 0.83 mJ | 1.7 mJ |
+| C | 1.10 m | 400 V | Doublet in front of the back plates | E3 + / E1 − | 22.8 V | 0.95 mJ | 1.9 mJ |
+| C | 1.10 m | 400 V | Doublet on the turn at the right-hand end | E6 + / E3 − | 30.9 V | 1.8 mJ | 3.6 mJ |
+
+What changes with more eels:
+
+- **Energy roughly adds up per eel, about 0.14 J per eel per day.** But position matters more than numbers: one strike beside a plate is worth twenty mid-tank ones.
+- **The polyphase bridge needs no changes.** Whichever eel fires, and wherever it points, the pair of plates with the largest difference conducts.
+- **Simultaneous discharges would add.** The plates would see the sum of both fields, which can raise or cancel the plate-to-plate difference depending on how the eels are aligned. The animation schedules discharges apart so each one can be followed; the physics in `potential()` superposes directly if you want to model overlaps.
+- **The alarm and the monitor scale naturally.** Each discharge pays for its own warning, and the monitor logs every eel's discharges, including how often each one senses, which is a per-eel activity record.
+- **Welfare comes first.** A group needs a larger tank than the 3 m single-eel habitat, more hides, and keepers watching for aggression. The 3-eel option is shown in the same tank only to demonstrate the electrical behaviour.
+
 ## 5. Rules built into the machine
 
 These are requirements the design must meet, not suggestions:

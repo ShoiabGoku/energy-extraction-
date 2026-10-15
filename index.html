@@ -92,6 +92,13 @@
   #hear li { display: flex; gap: 6px; align-items: baseline; }
   #hear li i { width: 8px; height: 8px; border-radius: 50%; flex: none; transform: translateY(1px); }
   #hear li.muted { opacity: .45; text-decoration: line-through; }
+  .seglbl { font-size: 12px; color: var(--muted); align-self: center; margin-right: 2px; }
+  #eelSeg button { min-width: 30px; }
+  #eelList { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 5px; font-size: 12.5px; }
+  #eelList li { display: grid; grid-template-columns: 10px 1fr; gap: 0 7px; }
+  #eelList li i { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; }
+  #eelList li span { grid-column: 2; color: var(--muted); font-size: 12px; }
+  #eelList li.firing span { color: var(--accent); }
   #hear.off li { opacity: .5; }
   #soundBtn.on::before { content: "\25CF "; color: var(--accent-ink); }
   body.nopanels .panel { display: none; }
@@ -119,6 +126,12 @@
   <div class="seg" role="group" aria-label="Model">
     <button type="button" data-model="habitat" aria-pressed="true">A · Habitat harvester</button>
     <button type="button" data-model="organ" aria-pressed="false">B · Artificial organ</button>
+  </div>
+  <div class="seg" role="group" aria-label="Number of eels" id="eelSeg" title="How many eels live in the tank">
+    <span class="seglbl">Eels</span>
+    <button type="button" data-eels="1" aria-pressed="true">1</button>
+    <button type="button" data-eels="2" aria-pressed="false">2</button>
+    <button type="button" data-eels="3" aria-pressed="false">3</button>
   </div>
   <button type="button" class="btn" id="soundBtn" aria-pressed="false" title="Play the sounds you would really hear">Sound off</button>
   <button type="button" class="btn" id="layersBtn" aria-expanded="false">Layers &amp; files</button>
@@ -273,11 +286,14 @@ async function load(key) {
   });
   const mixer = new THREE.AnimationMixer(root);
   const clip = gltf.animations[0];
+  const clips = Object.fromEntries(gltf.animations.map(c => [c.name, c]));
   const action = mixer.clipAction(clip);
   action.play();
-  const tl = MODELS[key].timeline ? await (await fetch(MODELS[key].timeline)).json() : null;
-  return (cache[key] = { key, root, mixer, action, period: clip.duration, tl, loops: 0,
-                         mid: root.getObjectByName('eel_joint_12') });
+  const tlAll = MODELS[key].timeline ? await (await fetch(MODELS[key].timeline)).json() : null;
+  const mids = {};
+  for (const id of 'ABC') mids[id] = root.getObjectByName(`eel${id}_joint_12`);
+  return (cache[key] = { key, root, mixer, action, clips, period: clip.duration, tlAll, eels: 1,
+                         tl: tlAll ? scenarioView(tlAll, 1) : null, loops: 0, mids });
 }
 
 function frameScene(key, root) {
@@ -304,6 +320,38 @@ function frameScene(key, root) {
   controls.update();
 }
 
+// One timeline per option (1, 2 or 3 eels), merged with the shared constants.
+function scenarioView(all, n) {
+  const sc = all.scenarios[String(n)];
+  return Object.assign({}, all, sc, { eelInfo: all.eels, active: sc.eels, scenarios: undefined });
+}
+
+async function setEels(n) {
+  if (!cur || !cur.tlAll) return;
+  n = Math.min(3, Math.max(1, Math.round(n) || 1));
+  const t = cur.action.time;
+  const next = cur.mixer.clipAction(cur.clips[n === 1 ? '1 eel' : `${n} eels`]);
+  if (next !== cur.action) {
+    cur.action.stop();
+    next.reset();
+    next.play();
+    next.time = t;
+    cur.action = next;
+    cur.mixer.update(0);
+  }
+  cur.eels = n;
+  cur.tl = scenarioView(cur.tlAll, n);
+  document.querySelectorAll('[data-eels]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.eels === n)));
+  buildPanels('habitat');
+  buildLayers();
+  rebuildLog(t);
+  lastHear = '';
+  lastEels = '';
+  const u = new URL(location.href); u.searchParams.set('eels', n); history.replaceState(null, '', u);
+  if (soundPrefs.on) { await loadStems(); restartAudio(); }
+}
+document.querySelectorAll('[data-eels]').forEach(b => b.addEventListener('click', () => setEels(+b.dataset.eels)));
+
 async function setModel(key) {
   ready = false;
   document.querySelectorAll('[data-model]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.model === key)));
@@ -311,6 +359,7 @@ async function setModel(key) {
   cur = await load(key);
   scene.add(cur.root);
   frameScene(key, cur.root);
+  $('eelSeg').hidden = !cur.tlAll;
   buildPanels(key);
   buildLayers();
   stopSrc();
@@ -319,6 +368,7 @@ async function setModel(key) {
   seek(0);
   const u = new URL(location.href); u.searchParams.set('model', key); history.replaceState(null, '', u);
   ready = true;
+  if (cur.tlAll && params.get('eels') && !cur.eelsFromUrl) { cur.eelsFromUrl = true; await setEels(+params.get('eels')); }
 }
 
 // ---------------------------------------------------------------- panels
@@ -342,9 +392,11 @@ function buildPanels(key) {
         <div><div class="lbl">Supercapacitor</div><div class="big" id="scE">3.000 J</div><div class="hint" id="scV">&nbsp;</div></div>
         <div><div class="lbl">Added load on eel</div><div class="big" id="loadPct">0 %</div><div class="bar"><i id="loadBar"></i></div><div class="hint">welfare limit 5 %</div></div>
       </div>
+      <div class="card"><div class="lbl">Eels in the tank <span>${tl.active.length}</span></div><ul id="eelList"></ul>
+        ${tl.active.length > 1 ? '<p class="hint" style="margin:6px 0 0">A group needs a bigger tank than this 3 m one, and keepers watch for squabbles. This option shows how the harvester copes with several eels.</p>' : ''}</div>
       <div class="card"><div class="lbl">What you hear <span id="hearState">sound off</span></div><ul id="hear"></ul></div>
       <div class="card"><div class="lbl">Event log</div><ul id="log"></ul></div>
-      <p class="note">A typical real day collects ~${tl.constants.typical_day_J} J, about a thousand years to charge one phone. This ${tl.period.toFixed(0)} s loop packs a day’s highlights together, and pulses fired right beside a plate (like the feeding strike) collect ~8× more than mid-tank ones. Dots in the leads are slowed so you can follow them; real current is instant.</p>`;
+      <p class="note">A typical real day collects ~${tl.constants.typical_day_J} J per eel, about a thousand years for one eel to charge one phone. This ${tl.period.toFixed(0)} s loop packs a day’s highlights together, and pulses fired right beside a plate (like the feeding strike) collect ~8× more than mid-tank ones. Dots in the leads are slowed so you can follow them; real current is instant.</p>`;
     $('markers').innerHTML = tl.markers.map(m =>
       `<span title="${m.label}" style="left:${(m.t / tl.period) * 100}%;background:${MARK_COLORS[m.kind] || '#999'}"></span>`).join('');
   } else {
@@ -405,7 +457,7 @@ function updateHabitat(t) {
   const tl = cur.tl, c = tl.constants, st = habitatState(t), ev = st.ev;
   const names = tl.plates, lives = {};
   const lvHz = series('lv_hz', t);
-  lives.sense = `${lvHz.toFixed(0)} sensing pulses/s · plates see ~${c.lv_plate_dV.toFixed(2)} V`;
+  lives.sense = `${lvHz.toFixed(0)} sensing pulses/s from ${tl.active.length === 1 ? 'the eel' : tl.active.length + ' eels'} · plates see ~${c.lv_plate_dV.toFixed(2)} V`;
   lives.discharge = `${ev.label}: ${ev.pulses} pulses at ${ev.rate}/s`;
   lives.field = `~${c.water_W} W into the water during each pulse`;
   lives.plates = `${names[ev.plus]} ${fmtV(ev.plates_V[ev.plus])} / ${names[ev.minus]} ${fmtV(ev.plates_V[ev.minus])} → ΔV ${ev.dV.toFixed(1)} V`;
@@ -453,7 +505,9 @@ function updateHabitat(t) {
   scopeBuf.push({ c: scopeClock, org: st.flash ? c.organ_V : lvBlip ? c.lv_V : 0, dv: st.flash ? ev.dV : lvBlip ? c.lv_plate_dV : 0 });
   while (scopeBuf.length && scopeBuf[0].c < scopeClock - 4) scopeBuf.shift();
   drawScope();
-  if (cur.mid) cur.mid.getWorldPosition(flashLight.position);
+  const mid = cur.mids[ev.eel];
+  if (mid) mid.getWorldPosition(flashLight.position);
+  updateEels(t);
   flashLight.intensity = st.flash ? 4.5 : flashLight.intensity * 0.8;
   return st;
 }
@@ -528,11 +582,16 @@ async function ensureAudio() {
       audio.gains.push(g);
     });
   }
-  if (!audio.buf) {
-    const url = (cache.habitat && cache.habitat.tl.audio.stems) || 'models/eel-habitat-harvester.sound-stems.wav';
-    audio.buf = await audio.ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
-  }
+  await loadStems();
   applyGains();
+}
+async function loadStems() {
+  const tl = (cur && cur.tl) || (cache.habitat && cache.habitat.tl);
+  if (!tl || !audio.ctx) return;
+  const url = tl.audio.stems;
+  audio.bufs = audio.bufs || {};
+  if (!audio.bufs[url]) audio.bufs[url] = await audio.ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+  audio.buf = audio.bufs[url];
 }
 function applyGains() {
   if (!audio.ctx) return;
@@ -612,6 +671,33 @@ setInterval(() => {
   if (audio.ctx && audio.ctx.state === 'running' && performance.now() - lastFrameAt > 400) audio.ctx.suspend();
 }, 250);
 
+let lastEels = '';
+function updateEels(t) {
+  const ul = $('eelList');
+  if (!ul) return;
+  const tl = cur.tl, P = tl.period;
+  const rows = tl.active.map(id => {
+    const info = tl.eelInfo.find(e => e.id === id), own = tl.events.filter(e => e.eel === id);
+    let state = '', firing = false;
+    for (const e of own) {
+      if (wrapD(t, e.t0, P) <= e.vis) { state = 'Firing: ' + e.label.split(': ')[1]; firing = true; }
+    }
+    let db = t - info.breath;
+    db -= P * Math.round(db / P);
+    if (!state && db > -1.6 && db < 1.2) state = db < -0.1 ? 'Rising to breathe' : 'Breathing at the surface';
+    for (const e of own) {
+      if (!state && e.kind === 'feed' && wrapD(t, e.t_cp - 4.2, P) < 4.2 - 0.25) state = 'Sensing its food sinking';
+    }
+    if (!state) {
+      const arr = tl.series.lv_by_eel[id], i = Math.min(Math.floor(t / 0.05), arr.length - 2);
+      state = `Cruising · ${Math.round(arr[i])} sensing pulses/s`;
+    }
+    return `<li class="${firing ? 'firing' : ''}"><i style="background:${info.colour}"></i><b>${info.name}</b> ` +
+           `${info.length.toFixed(2)} m · ${info.organ_V} V organ<span>${state}</span></li>`;
+  }).join('');
+  if (rows !== lastEels) { ul.innerHTML = rows; lastEels = rows; }
+}
+
 let lastHear = '';
 function updateHear(t, lvHz) {
   const ul = $('hear');
@@ -680,6 +766,8 @@ function buildLayers() {
   };
   for (const child of cur.root.children) {
     if (/rig/i.test(child.name)) continue;
+    const eelId = /^Electric_eel_([ABC])$/.exec(child.name);
+    if (eelId && cur.tl && !cur.tl.active.includes(eelId[1])) continue;
     add(child.name.replace(/_/g, ' '), [child]);
   }
   const fields = [];
@@ -794,7 +882,8 @@ window.__VIEWER = {
   sound: () => ({ on: soundPrefs.on, ctx: audio.ctx && audio.ctx.state, loaded: !!audio.buf,
                   channels: audio.buf && audio.buf.numberOfChannels, duration: audio.buf && audio.buf.duration,
                   playing: !!audio.src, pos: audio.pos, rate: audio.rate }),
-  setSound,
+  setSound, setEels,
+  get eels() { return cur && cur.eels; },
   node: name => { const o = cur.root.getObjectByName(name); return o && o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(4)); },
 };
 setModel(params.get('model') === 'organ' ? 'organ' : 'habitat');

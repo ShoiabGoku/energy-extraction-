@@ -19,7 +19,7 @@ Read the full design, with the energy derivations, electronics, bill of material
 
 ## What the animation shows
 
-The habitat model holds one **28.8-second loop** that packs a day's highlights together. The eel swims a path around the tank. Its body follows its head, it ripples with a travelling wave, and it rises to gulp air, as electric eels must. At three moments it fires, and each discharge is computed, not just drawn:
+The habitat model holds a **28.8-second loop** that packs a day's highlights together (shown here for one eel; see [One, two or three eels](#one-two-or-three-eels)). The eel swims a path around the tank. Its body follows its head, it ripples with a travelling wave, and it rises to gulp air, as electric eels must. At three moments it fires, and each discharge is computed, not just drawn:
 
 | Time | What the eel does | Plates that conduct | ΔV between them | Energy collected per pulse |
 |---|---|---|---|---|
@@ -41,6 +41,26 @@ The physics behind each frame comes from the same code that builds the model. Th
 
 Part B animates too: Na⁺ ions cross the cation membrane one way and Cl⁻ ions cross the anion membrane the other way, together making one current.
 
+## One, two or three eels
+
+The habitat can hold **1, 2 or 3 eels**. Pick the number with the **Eels** buttons in the viewer, or play the matching clip in any 3D program: `1 eel`, `2 eels` or `3 eels`.
+
+![Three eels: Eel B strikes its food while Eel A and juvenile Eel C swim above](docs/img/three-eels.png)
+
+| Eel | Length | Organ voltage | Where it swims | What it does in the loop |
+|---|---|---|---|---|
+| **A** | 1.65 m | 600 V | Middle layer, round the edge of the tank | Doublet over the hide, feeding strike beside the back plates, doublet near the end wall, breathes at 19.5 s |
+| **B** (2 or 3 eels) | 1.35 m | ~490 V | Lower layer, the other way round | Its own feeding strike under the hatch, a mid-water doublet, rises through the middle to breathe at 27 s |
+| **C** (3 eels) | 1.10 m, juvenile | ~400 V | Upper layer at the back | Two doublets, breathes at 18.9 s |
+
+Organ voltage and current are scaled with body length, since a longer eel has more electrocytes in series. Each eel gets its own food, breaths and sensing clicks. Every discharge is computed from that eel's position at that moment.
+
+The extra eels make the main lesson clearer. Eel B's feeding strike under the hatch collects only **0.7 mJ per pulse**, compared with eel A's **10 mJ** next to the plates, so where an eel fires matters more than how many eels there are.
+
+The paths are checked frame by frame. No eel touches another, the glass, a guard screen or the hide tube; the closest approach is 5 cm. Discharges are scheduled so they never overlap in time.
+
+A real group would need a **bigger tank** than this 3 m one, and keepers would watch for squabbles. The option shows how the harvester copes with several eels; it is not a stocking recommendation.
+
 ## Sound: only what you would really hear
 
 The discharge itself is **silent**: a few hundred volts in water doesn't crackle. So the soundtrack holds only sounds with a real source, timed to the same events as the animation:
@@ -49,7 +69,7 @@ The discharge itself is **silent**: a few hundred volts in water doesn't crackle
 - **The exhibit speaker** on the display stand: it plays the plate signal through a bio-amplifier, the way researchers listen to electric fish. Cruising sounds like soft clicks, a doublet like two sharp clicks, and the feeding volley like a buzz at ~330 pulses a second. A discharge nearer a plate sounds louder. The speaker runs on mains power, since audio needs far more energy than an eel provides.
 - **The alarm:** 2 to 12 short piezo chirps with the beacon, depending on how much energy the discharge delivered.
 
-In the viewer, press **Sound on**. The Layers & files menu lets you mute the tank, the speaker or the alarm separately, and a **What you hear** card names each sound as it plays. For other programs, [`models/eel-habitat-harvester.soundtrack.wav`](models/eel-habitat-harvester.soundtrack.wav) is a stereo mix exactly one loop long. Part B makes no sound.
+In the viewer, press **Sound on**. The Layers & files menu lets you mute the tank, the speaker or the alarm separately, and a **What you hear** card names each sound as it plays. For other programs, [`models/eel-habitat-harvester.soundtrack.wav`](models/eel-habitat-harvester.soundtrack.wav) is a stereo mix exactly one loop long, with `-2-eels` and `-3-eels` versions for the other options. Part B makes no sound.
 
 ## The viewer and its panels
 
@@ -70,7 +90,7 @@ Each model is exported in three formats so that anything can open it:
 
 | File | Format | Opens in | Notes |
 |---|---|---|---|
-| `*.glb` | glTF 2.0 binary, **animated** | Blender, Unity, Unreal, Godot, three.js / Babylon.js, Windows 3D Viewer, KeyShot, online glTF viewers | Rigged eel (24-joint skin) and one looping clip with 100 channels: swimming, field flashes, plate glows, energy dots, harvester stages, beacon, display, food. PBR materials, named hierarchy, a description on every part (`extras.description`). Passes the Khronos glTF Validator with 0 errors, 0 warnings, 0 hints |
+| `*.glb` | glTF 2.0 binary, **animated** | Blender, Unity, Unreal, Godot, three.js / Babylon.js, Windows 3D Viewer, KeyShot, online glTF viewers | Three rigged eels (24-joint skins) and three looping clips, `1 eel`, `2 eels` and `3 eels`, that share the swimming data: swimming, field flashes, plate glows, energy dots, harvester stages, beacon, display, food. PBR materials, named hierarchy, a description on every part (`extras.description`). Passes the Khronos glTF Validator with 0 errors, 0 warnings, 0 hints |
 | `*.obj` + `*.mtl` | Wavefront OBJ | Practically every 3D program: Maya, 3ds Max, Cinema 4D, SketchUp, Rhino, MeshLab… | One frozen moment, mid feeding strike. One named object per part with colours, emission and opacity |
 | `*.stl` | Binary STL | Slicers (Cura, PrusaSlicer), CAD (Fusion, SolidWorks, FreeCAD), and **GitHub's built-in 3D preview** (click the file) | The same frozen moment. Single colour, **millimetres, +Z up**, opaque parts only (glass, water, field lines and glows left out so you can see inside) |
 
@@ -86,8 +106,8 @@ GLB and OBJ use **metres, +Y up**. The habitat model is 3.7 × 1.9 × 1.9 m incl
 
 - **Blender:** File → Import → glTF 2.0 → `models/eel-habitat-harvester.glb`, then press play in the Timeline. The water and glass are transparent; the field lines, plate glows and beacon glow.
 - **Windows:** double-click the `.glb` file. 3D Viewer plays the animation.
-- **Unity / Unreal / Godot:** import the `.glb` and play its one clip, "Swim and harvest (loop)".
-- **Sound in any of them:** add `models/eel-habitat-harvester.soundtrack.wav` at frame 1. It is exactly one loop long, so it repeats in step with the animation.
+- **Unity / Unreal / Godot:** import the `.glb` and play the clip for the number of eels you want: `1 eel`, `2 eels` or `3 eels`. In Windows 3D Viewer, pick it from the animation list.
+- **Sound in any of them:** add the matching soundtrack at frame 1: `models/eel-habitat-harvester.soundtrack.wav` for 1 eel, or `...soundtrack-2-eels.wav` / `...soundtrack-3-eels.wav`. Each is exactly one loop long, so it repeats in step with the animation.
 - **Browser:** run `python -m http.server` in this folder and open `http://localhost:8000`.
 - **Print or CAD:** use the `.stl` file.
 

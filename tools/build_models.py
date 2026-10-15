@@ -490,6 +490,8 @@ MATERIALS = {
     "pvc_hide": mat((0.33, 0.29, 0.24), rough=0.7),
     "lid_mesh": mat((0.08, 0.08, 0.08), rough=0.6),
     "eel_skin": mat((0.24, 0.22, 0.17), rough=0.38),
+    "eel_skin_b": mat((0.30, 0.23, 0.16), rough=0.38),
+    "eel_skin_c": mat((0.27, 0.27, 0.23), rough=0.38),
     "eel_fin": mat((0.19, 0.16, 0.13), rough=0.5, double=True),
     "eel_eye": mat((0.02, 0.02, 0.02), rough=0.05),
     "food": mat((0.95, 0.56, 0.48), rough=0.5),
@@ -592,33 +594,73 @@ EY = 1.27                      # electrode centre height
 E0 = np.array([1.95, 1.05, -0.25])  # harvester enclosure origin (bottom centre)
 
 # Eel and electrical model (see docs/DESIGN.md sections 2-3)
-L_EEL = 1.65                   # body length used for the rig, m
-NJ = 24                        # joints along the body
-S_J = np.linspace(0, L_EEL, NJ)
+L_REF = 1.65                   # body length of eel A, the reference adult, m
+NJ = 24                        # joints along each body
 MID_J = NJ // 2
 SIGMA = 0.01                   # water conductivity, S/m (100 uS/cm)
-I_EEL = 1.0                    # discharge current, A
-V_ORGAN = 600.0                # organ voltage during a feeding volley, V
-P_WATER = 300.0                # power the eel puts into the water per pulse, W
+I_EEL = 1.0                    # discharge current of eel A, A
+V_ORGAN = 600.0                # organ voltage of eel A during a feeding volley, V
+P_WATER = 300.0                # power eel A puts into the water per pulse, W
 R_PAIR = 240.0                 # spreading resistance of a plate pair, ohm
 T_PULSE = 0.002                # pulse width, s
 ETA = 0.70                     # converter efficiency
 DIODE = 0.7                    # one diode drop, V (two conduct)
-K_PHI = I_EEL / (4 * math.pi * SIGMA)
 LV_VOLTS = 10.0                # low-voltage sensing pulses
 SC_C, SC_E0 = 1.0, 3.0         # supercapacitor bank: 1 F, 3 J at the start of the loop
 PHONE_J = 15 * 3600.0
-TYPICAL_DAY_J = 0.14
+TYPICAL_DAY_J = 0.14           # per eel
 ALARM_UNIT_MJ = 1.7            # one 20 ms LED strobe (1.2 mJ) + one 50 ms piezo chirp (0.5 mJ)
 SR = 22050                     # soundtrack sample rate
 
-# Closed swimming loop for the head (front straight runs toward -x).
-# The loop starts just before the hide, so the feeding strike falls mid-loop.
+# Eel A swims a closed loop round the middle layer (front straight runs toward -x).
+# The loop starts just before the hide, so the feeding strike falls early in the loop.
 SWIM_PATH = [(-0.95, 1.19, -0.17), (-0.60, 1.17, -0.23), (-0.10, 1.21, -0.22), (0.40, 1.24, -0.20),
              (0.72, 1.25, -0.16), (1.02, 1.28, -0.04), (1.10, 1.30, 0.15), (0.95, 1.30, 0.28),
              (0.45, 1.36, 0.30), (0.08, 1.52, 0.30), (-0.15, 1.635, 0.28), (-0.45, 1.42, 0.30),
              (-0.85, 1.27, 0.26), (-1.08, 1.22, 0.05)]
 CP_HIDE, CP_FOOD, CP_BREATH, CP_CORNER = 1, 4, 10, 13
+# Eel B keeps to the lower layer and swims the other way round; it rises to breathe through the
+# middle of the tank, which eel A's loop never crosses.
+PATH_B = [(-0.95, 1.06, 0.24), (-0.40, 1.02, 0.36), (0.20, 1.03, 0.34), (0.70, 1.06, 0.22),
+          (1.00, 1.10, 0.02), (0.80, 1.08, -0.06), (0.40, 1.08, 0.06), (0.10, 1.30, 0.10),
+          (-0.20, 1.64, 0.10), (-0.50, 1.30, 0.10), (-0.85, 1.08, 0.12), (-1.10, 1.08, 0.18)]
+# Eel C, a juvenile, keeps to the upper layer at the back of the tank.
+PATH_C = [(-0.80, 1.50, -0.25), (-0.20, 1.52, -0.32), (0.40, 1.50, -0.30), (0.85, 1.52, -0.18),
+          (0.75, 1.55, -0.04), (0.20, 1.655, -0.05), (-0.40, 1.52, -0.06), (-0.95, 1.50, -0.14)]
+
+EELS = [
+    dict(id="A", name="Eel A", length=1.65, path=SWIM_PATH, skin="eel_skin", breath=CP_BREATH,
+         slow=CP_BREATH, fast=CP_FOOD, colour="#f2b33d",
+         desc="Electrophorus, about 1.65 m. Its electric organ fills roughly 80% of the body: about 6,000 "
+              "electrocytes in series, ~0.15 V each, up to 860 V (E. voltai) for ~2 ms. It swims, surfaces to "
+              "breathe and hunts normally; the machine never stimulates, baits or restrains it.",
+         events=[dict(id="probe_hide", kind="probe", cp=CP_HIDE, label="probing doublet over the hide",
+                      story="Eel A fires a doublet over the hide to make hidden prey twitch. Mid-tank, so the "
+                            "plates see less."),
+                 dict(id="feed", kind="feed", cp=CP_FOOD, pulses=70, rate=330,
+                      label="feeding strike, 70-pulse volley",
+                      story="Eel A strikes its food with two bursts of high-voltage pulses, close to the "
+                            "back-wall plates."),
+                 dict(id="probe_corner", kind="probe", cp=CP_CORNER, label="probing doublet near the end wall",
+                      story="Eel A checks the corner with two quick pulses. Its head is close to plate E1.")]),
+    dict(id="B", name="Eel B", length=1.35, path=PATH_B, skin="eel_skin_b", breath=8,
+         slow=8, fast=5, anchor=(5, 18.95), colour="#5ad1c4",
+         desc="A second, smaller adult (about 1.35 m), so a lower organ voltage (~490 V). It keeps to the "
+              "lower layer and swims the other way round.",
+         events=[dict(id="probe_midwater", kind="probe", cp=7, label="probing doublet in mid-water",
+                      story="Eel B fires a probing doublet in mid-water as it heads up to breathe."),
+                 dict(id="feed", kind="feed", cp=5, pulses=50, rate=300, label="feeding strike, 50-pulse volley",
+                      story="Eel B takes its own food under the hatch with a shorter volley from a smaller organ.")]),
+    dict(id="C", name="Eel C", length=1.10, path=PATH_C, skin="eel_skin_c", breath=5,
+         slow=5, anchor=(1, 5.0), colour="#b48cff",
+         desc="A juvenile, about 1.1 m (~400 V). It keeps to the upper layer at the back.",
+         events=[dict(id="probe_back", kind="probe", cp=1, label="probing doublet near the back wall",
+                      story="Eel C, a juvenile, probes with a doublet right in front of the back-wall plates."),
+                 dict(id="probe_turn", kind="probe", cp=4, label="probing doublet on the turn",
+                      story="Eel C probes again as it turns at the right-hand end.")]),
+]
+SCENARIOS = {1: "A", 2: "AB", 3: "ABC"}
+CLIP_NAMES = {1: "1 eel", 2: "2 eels", 3: "3 eels"}
 
 # Visible flash patterns (seconds from event start). Real pulses are 2 ms at
 # up to ~400 per second, far too fast to see, so the flashes are stretched.
@@ -629,9 +671,9 @@ PACKET_TRAVEL = 1.1            # seconds for an energy packet to run along a lea
 PACKETS_PER_LEAD = 4
 
 
-def eel_profile(t):
+def eel_profile(t, scale=1.0):
     """Radius and cross-section shape along the body, t = 0 (snout) .. 1 (tail)."""
-    R0 = 0.05
+    R0 = 0.05 * scale
     t = np.asarray(t, float)
     snout = np.sqrt(np.clip(1 - (1 - np.clip(t / 0.07, 0, 1)) ** 2, 0, 1))
     taper = np.where(t < 0.3, 1.0, np.clip((1 - t) / 0.7, 0, 1) ** 0.85)
@@ -641,10 +683,10 @@ def eel_profile(t):
     return r, sx, sy
 
 
-def skin_weights(mesh):
+def skin_weights(mesh, length):
     """Two-joint linear blend by distance along the straight bind pose (-x)."""
-    s = np.clip(-mesh.pos[:, 0], 0, L_EEL)
-    f = s / (L_EEL / (NJ - 1))
+    s = np.clip(-mesh.pos[:, 0], 0, length)
+    f = s / (length / (NJ - 1))
     i0 = np.clip(np.floor(f), 0, NJ - 2).astype(int)
     w1 = np.clip(f - i0, 0, 1)
     joints = np.zeros((len(s), 4), int)
@@ -656,22 +698,22 @@ def skin_weights(mesh):
     return mesh
 
 
-def build_eel_bind():
+def build_eel_bind(length):
     """Straight eel in its bind pose: snout at the origin, body along -x, up +y."""
+    k = length / L_REF
     n = 240
-    s = np.linspace(0, L_EEL, n)
-    t = s / L_EEL
+    s = np.linspace(0, length, n)
+    t = s / length
     P = np.stack([-s, np.zeros(n), np.zeros(n)], axis=1)
-    r, sx, sy = eel_profile(t)
-    k = 28
-    ang = np.linspace(0, 2 * np.pi, k, endpoint=False)
+    r, sx, sy = eel_profile(t, k)
+    ang = np.linspace(0, 2 * np.pi, 28, endpoint=False)
     prof = np.stack([np.cos(ang)[None] * (r * sx)[:, None], np.sin(ang)[None] * (r * sy)[:, None]], axis=-1)
     body = sweep(P, prof, world_up=True)
 
     # Anal fin: the long ventral ribbon knifefish swim with.
     sel = t >= 0.12
     tf, Pf, hf = t[sel], P[sel], (r * sy)[sel]
-    f = 0.03 * smoothstep(0.12, 0.26, tf) * (0.35 + 0.65 * (1 - smoothstep(0.85, 1.0, tf)))
+    f = 0.03 * k * smoothstep(0.12, 0.26, tf) * (0.35 + 0.65 * (1 - smoothstep(0.85, 1.0, tf)))
     th = 0.0018
     top, bot = -hf * 0.7, -hf - f
     one = np.ones_like(tf)
@@ -680,9 +722,9 @@ def build_eel_bind():
     fin = sweep(Pf, fin_prof, world_up=True)
 
     i = int(0.045 * (n - 1))
-    eyes = [sphere(0.0065, 16, 10).xform(T(P[i, 0], r[i] * sy[i] * 0.42, side * r[i] * sx[i] * 0.86))
+    eyes = [sphere(0.0065 * math.sqrt(k), 16, 10).xform(T(P[i, 0], r[i] * sy[i] * 0.42, side * r[i] * sx[i] * 0.86))
             for side in (-1, 1)]
-    return [skin_weights(body), skin_weights(fin), skin_weights(merge(eyes))]
+    return [skin_weights(body, length), skin_weights(fin, length), skin_weights(merge(eyes), length)]
 
 
 def skin_cpu(mesh, joint_world, ibm):
@@ -696,44 +738,62 @@ def skin_cpu(mesh, joint_world, ibm):
 
 
 class EelMotion:
-    """Follow-the-leader swimming along a closed loop, plus a travelling body wave."""
+    """Follow-the-leader swimming along a closed loop, plus a travelling body wave.
 
-    def __init__(self):
-        self.loop = Polyline(closed_spline(SWIM_PATH, 60), closed=True)
+    period: force the loop to this length (every eel shares eel A's loop).
+    anchor: (control point, time) - shift the eel along its loop so it reaches
+            that point at that time.
+    """
+
+    def __init__(self, path, length, slow=None, fast=None, period=None, anchor=None, base=0.18):
+        self.length = length
+        self.S = np.linspace(0, length, NJ)
+        self.loop = Polyline(closed_spline(path, 60), closed=True)
         L = self.loop.length
         cp = self.loop.P[:-1]
-        self.cp_u = [float(self.loop.s[np.argmin(np.linalg.norm(cp - np.asarray(c), axis=1))]) for c in SWIM_PATH]
+        self.cp_u = [float(self.loop.s[np.argmin(np.linalg.norm(cp - np.asarray(c), axis=1))]) for c in path]
         u = np.linspace(0, L, 4001)
 
         def bump(c, w):
             d = (u - c + L / 2) % L - L / 2
             return np.exp(-(d / w) ** 2)
 
-        v = 0.18 * (1 - 0.45 * bump(self.cp_u[CP_BREATH], 0.45)) * (1 + 1.3 * bump(self.cp_u[CP_FOOD] - 0.12, 0.30))
+        v = np.full_like(u, base)
+        if slow is not None:
+            v = v * (1 - 0.45 * bump(self.cp_u[slow], 0.45))
+        if fast is not None:
+            v = v * (1 + 1.3 * bump(self.cp_u[fast] - 0.12, 0.30))
         tt = np.concatenate([[0.0], np.cumsum(np.diff(u) * 0.5 * (1 / v[1:] + 1 / v[:-1]))])
-        self.frames = int(round(tt[-1] * FPS))
-        self.T = self.frames / FPS
+        if period is None:
+            self.frames = int(round(tt[-1] * FPS))
+            self.T = self.frames / FPS
+        else:
+            self.T, self.frames = period, int(round(period * FPS))
         self.u, self.t_of_u = u, tt * (self.T / tt[-1])
         self.v = v * tt[-1] / self.T
-        self.freq = round(0.9 * self.T) / self.T    # whole number of body waves per loop
-        self.lam = 0.95
+        k = L_REF / length
+        self.freq = round(0.9 * k * self.T) / self.T    # whole number of body waves per loop
+        self.lam = 0.95 / k
+        self.phase = 0.0
+        if anchor is not None:
+            self.phase = (float(np.interp(self.cp_u[anchor[0]], u, self.t_of_u)) - anchor[1]) % self.T
 
     def time_at(self, cp_index):
-        return float(np.interp(self.cp_u[cp_index], self.u, self.t_of_u))
+        return (float(np.interp(self.cp_u[cp_index], self.u, self.t_of_u)) - self.phase) % self.T
 
     def speed(self, tau):
-        return float(np.interp(np.interp(tau % self.T, self.t_of_u, self.u), self.u, self.v))
+        return float(np.interp(np.interp((tau + self.phase) % self.T, self.t_of_u, self.u), self.u, self.v))
 
     def pose(self, tau):
         """World positions (NJ, 3) and rotations (NJ, 3, 3) of the joints."""
-        sh = float(np.interp(tau % self.T, self.t_of_u, self.u))
-        uj = sh - S_J
+        sh = float(np.interp((tau + self.phase) % self.T, self.t_of_u, self.u))
+        uj = sh - self.S
         base = self.loop.at(uj)
         tan = self.loop.tangent(uj)
         side = np.cross(np.array([0.0, 1.0, 0.0]), tan)
         side /= np.maximum(np.linalg.norm(side, axis=1, keepdims=True), 1e-9)
-        amp = 0.012 + 0.05 * (S_J / L_EEL) ** 1.6
-        P = base + side * (amp * np.sin(2 * np.pi * (S_J / self.lam - self.freq * tau)))[:, None]
+        amp = (0.012 + 0.05 * (self.S / self.length) ** 1.6) * self.length / L_REF
+        P = base + side * (amp * np.sin(2 * np.pi * (self.S / self.lam - self.freq * tau)))[:, None]
         fwd = np.empty_like(P)
         fwd[1:-1] = P[:-2] - P[2:]
         fwd[0], fwd[-1] = P[0] - P[1], P[-2] - P[-1]
@@ -744,7 +804,11 @@ class EelMotion:
         return P, Rm
 
     def body_point(self, P, s):
-        return np.stack([np.interp(s, S_J, P[:, k]) for k in range(3)])
+        return np.stack([np.interp(s, self.S, P[:, k]) for k in range(3)])
+
+    def radii(self):
+        r, sx, sy = eel_profile(self.S / self.length, self.length / L_REF)
+        return r * np.maximum(sx, sy)
 
 
 def _images(p):
@@ -754,9 +818,9 @@ def _images(p):
                      (x, 2 * Y_BOT - y, z), (x, 2 * WATER_TOP - y, z)])
 
 
-def potential(points, H, Tl, volts=V_ORGAN):
+def potential(points, H, Tl, current=I_EEL):
     """Potential (V) at points from a head(+)/tail(-) current dipole in an insulated tank."""
-    k = K_PHI * volts / V_ORGAN
+    k = current / (4 * math.pi * SIGMA)
     pts = np.asarray(points, float)
     phi = np.zeros(len(pts))
     for hi, ti in zip(_images(H), _images(Tl)):
@@ -1043,27 +1107,81 @@ def packet_keys(line, t_start, t_end, k, forward, period):
     return out
 
 
+def make_events(eel, motion, plate_pts):
+    """The high-voltage discharges one eel fires during the loop, with their physics."""
+    k = eel["length"] / L_REF                 # organ voltage and current scale with body length
+    out = []
+    for spec in eel["events"]:
+        t_cp = motion.time_at(spec["cp"])
+        if spec["kind"] == "feed":
+            flashes, pulses, rate, t0 = VOLLEY_FLASHES, spec["pulses"], spec["rate"], t_cp - 0.25
+        else:
+            flashes, pulses, rate, t0 = DOUBLET_FLASHES, 2, 250, t_cp - 0.15
+        vis = max(b for _, b in flashes)
+        tm = t0 + vis / 2
+        P, _ = motion.pose(tm)
+        H = motion.body_point(P, 0.05 * eel["length"])
+        Tl = motion.body_point(P, 0.97 * eel["length"])
+        phis = np.array([potential(pts, H, Tl, I_EEL * k).mean() for pts in plate_pts])
+        ip, im = int(np.argmax(phis)), int(np.argmin(phis))
+        dV = float(phis[ip] - phis[im])
+        rail = max(dV - 2 * DIODE, 0.0)
+        p_w = rail ** 2 / (4 * R_PAIR)
+        e_pulse = p_w * T_PULSE
+        ev = dict(id=f"{eel['id']}_{spec['id']}", eel=eel["id"], kind=spec["kind"], t0=t0, t_cp=t_cp,
+                  flashes=flashes, pulses=pulses, rate=rate, label=f"{eel['name']}: {spec['label']}",
+                  story=spec["story"], vis=vis, t_mid=tm, plates_V=[round(float(v), 2) for v in phis],
+                  plus=ip, minus=im, dV=round(dV, 2), rail=round(rail, 2), cap_V=round(rail / 2, 2),
+                  power_W=round(p_w, 3), mJ_pulse=round(e_pulse * 1e3, 3),
+                  mJ_event=round(e_pulse * pulses * 1e3, 2), mJ_stored=round(e_pulse * pulses * ETA * 1e3, 2),
+                  load_pct=round(100 * p_w / (P_WATER * k * k), 3), organ_V=round(V_ORGAN * k),
+                  head=[round(float(v), 3) for v in H], tail=[round(float(v), 3) for v in Tl])
+        ev["alarm_flashes"] = int(min(12, max(2, ev["mJ_stored"] // ALARM_UNIT_MJ)))
+        ev["stages"] = {"discharge": [0, vis], "field": [0, vis], "plates": [0, vis + 0.25],
+                        "bridge": [0.3, vis + 1.6], "store": [0.9, vis + 2.4],
+                        "loads": [0.5, 0.75 + 0.5 * ev["alarm_flashes"]]}
+        out.append(ev)
+    return out
+
+
+def check_clearances(motions, period):
+    """Smallest gaps over the loop: eel to tank parts and eel to eel (negative = overlap)."""
+    worst = {}
+
+    def upd(key, v, t):
+        if key not in worst or v < worst[key][0]:
+            worst[key] = (round(float(v), 3), round(t, 2))
+
+    for kf in range(0, int(period * FPS) + 1, 2):
+        t = kf / FPS
+        poses = {i: m.pose(t)[0] for i, m in motions.items()}
+        for i, m in motions.items():
+            P, rad = poses[i], m.radii()
+            upd(f"{i}: end guards", np.min(1.403 - np.abs(P[:, 0]) - rad), t)
+            upd(f"{i}: back guards", np.min(P[:, 2] + 0.503 - rad), t)
+            upd(f"{i}: front glass", np.min(0.581 - P[:, 2] - rad), t)
+            upd(f"{i}: sand", np.min(P[:, 1] - rad - SUB_TOP), t)
+            upd(f"{i}: surface (snout may touch)", np.min(WATER_TOP - P[:, 1] - rad), t)
+            cx = np.clip(P[:, 0], -1.225, -0.475)
+            d = np.sqrt((P[:, 1] - (SUB_TOP + 0.09)) ** 2 + (P[:, 2] + 0.28) ** 2 + (P[:, 0] - cx) ** 2)
+            upd(f"{i}: hide tube", np.min(d - 0.11 - rad), t)
+        ids = sorted(motions)
+        for a in range(len(ids)):
+            for b in range(a + 1, len(ids)):
+                Pa, Pb = poses[ids[a]], poses[ids[b]]
+                ra, rb = motions[ids[a]].radii(), motions[ids[b]].radii()
+                gap = np.linalg.norm(Pa[:, None] - Pb[None], axis=2) - ra[:, None] - rb[None]
+                upd(f"{ids[a]}-{ids[b]}: eel to eel", gap.min(), t)
+    return worst
+
+
 def scene_habitat():
     stats = {}
-    motion = EelMotion()
-    period = motion.T
-
-    # ---- events: what happens during one loop ---------------------------------
-    t_corner = motion.time_at(CP_CORNER)
-    t_hide = motion.time_at(CP_HIDE)
-    t_food = motion.time_at(CP_FOOD)
-    t_breath = motion.time_at(CP_BREATH)
-    hv_specs = [
-        dict(id="probe_corner", kind="probe", t0=t_corner - 0.15, flashes=DOUBLET_FLASHES, pulses=2, rate=250,
-             beacon=3.0, label="Probing doublet near the end wall",
-             story="Two quick high-voltage pulses to check the corner. The head is close to plate E1."),
-        dict(id="probe_hide", kind="probe", t0=t_hide - 0.15, flashes=DOUBLET_FLASHES, pulses=2, rate=250,
-             beacon=3.0, label="Probing doublet over the hide",
-             story="Electric eels fire doublets to make hidden prey twitch. Mid-tank, so the plates see less."),
-        dict(id="feed", kind="feed", t0=t_food - 0.25, flashes=VOLLEY_FLASHES, pulses=70, rate=330,
-             beacon=5.0, label="Feeding strike: 70-pulse volley",
-             story="The eel strikes the food with two bursts of high-voltage pulses, close to the back-wall plates."),
-    ]
+    motions = {}
+    for e in EELS:
+        motions[e["id"]] = EelMotion(e["path"], e["length"], e.get("slow"), e.get("fast"),
+                                     period=None if e["id"] == "A" else motions["A"].T, anchor=e.get("anchor"))
+    period = motions["A"].T
 
     plates, guards, stand, tops, plate_frames = build_electrodes()
     plate_pts = [plate_samples(M) for _, M in plate_frames]
@@ -1071,176 +1189,180 @@ def scene_habitat():
     lead_paths = electrode_cable_paths(tops)
     leads = [Polyline(p) for p in lead_paths]
 
-    events = []
-    for spec in hv_specs:
-        vis = max(b for _, b in spec["flashes"])
-        tm = spec["t0"] + vis / 2
-        P, _ = motion.pose(tm)
-        H = motion.body_point(P, 0.05 * L_EEL)
-        Tl = motion.body_point(P, 0.97 * L_EEL)
-        phis = np.array([potential(pts, H, Tl).mean() for pts in plate_pts])
-        ip, im = int(np.argmax(phis)), int(np.argmin(phis))
-        dV = float(phis[ip] - phis[im])
-        rail = max(dV - 2 * DIODE, 0.0)
-        p_w = rail ** 2 / (4 * R_PAIR)
-        e_pulse = p_w * T_PULSE
-        ev = dict(spec, vis=vis, t_mid=tm, plates_V=[round(float(v), 2) for v in phis], plus=ip, minus=im,
-                  dV=round(dV, 2), rail=round(rail, 2), cap_V=round(rail / 2, 2), power_W=round(p_w, 3),
-                  mJ_pulse=round(e_pulse * 1e3, 3), mJ_event=round(e_pulse * spec["pulses"] * 1e3, 2),
-                  mJ_stored=round(e_pulse * spec["pulses"] * ETA * 1e3, 2),
-                  load_pct=round(100 * p_w / P_WATER, 3), organ_V=V_ORGAN,
-                  head=[round(float(v), 3) for v in H], tail=[round(float(v), 3) for v in Tl])
-        ev["alarm_flashes"] = int(min(12, max(2, ev["mJ_stored"] // ALARM_UNIT_MJ)))
-        ev["stages"] = {"discharge": [0, vis], "field": [0, vis], "plates": [0, vis + 0.25],
-                        "bridge": [0.3, vis + 1.6], "store": [0.9, vis + 2.4],
-                        "loads": [0.5, 0.75 + 0.5 * ev["alarm_flashes"]]}
-        events.append(ev)
-    feed = events[-1]
-    t_refresh = feed["t0"] + feed["vis"] + 2.6
-    t_drop = t_food - 4.2
+    eel_events = {e["id"]: make_events(e, motions[e["id"]], plate_pts) for e in EELS}
+    breath_t = {e["id"]: motions[e["id"]].time_at(e["breath"]) for e in EELS}
+    lv_dv = {}
+    for e in EELS:          # sensing pulses are too weak to harvest: show why with numbers
+        m, k = motions[e["id"]], e["length"] / L_REF
+        P0, _ = m.pose(0.0)
+        H, Tl = m.body_point(P0, 0.05 * e["length"]), m.body_point(P0, 0.97 * e["length"])
+        phis = np.array([potential(pts, H, Tl, I_EEL * k * LV_VOLTS / V_ORGAN).mean() for pts in plate_pts])
+        lv_dv[e["id"]] = float(phis.max() - phis.min())
+    all_events = [ev for e in EELS for ev in eel_events[e["id"]]]
+    feed_a = next(ev for ev in eel_events["A"] if ev["kind"] == "feed")
+    rest_t = feed_a["t0"] + 0.42          # frozen moment: eel A mid-volley, a flash is on
 
-    # Sensing pulses are too weak to harvest: show why with numbers.
-    P0, _ = motion.pose(0.0)
-    lv_phis = np.array([potential(pts, motion.body_point(P0, 0.05 * L_EEL), motion.body_point(P0, 0.97 * L_EEL),
-                                  volts=LV_VOLTS).mean() for pts in plate_pts])
-    lv_dV = float(lv_phis.max() - lv_phis.min())
+    # ---- eels: rigs, skinned meshes and swimming tracks (shared by every clip) -------
+    ft = np.arange(motions["A"].frames + 1) / FPS
+    rigs, eel_nodes, joints_of, ibms, swim = {}, {}, {}, {}, []
+    for e in EELS:
+        i, m = e["id"], motions[e["id"]]
+        ibm = np.array([T(s, 0, 0) for s in m.S])
+        joints = [Node(f"eel{i}_joint_{j:02d}") for j in range(NJ)]
+        rigs[i] = Node(f"Eel {i} rig", children=joints,
+                       desc=f"24-joint swimming rig for {e['name']}. The body follows the head's path.")
+        body, fin, eyes = build_eel_bind(e["length"])
+        eel_nodes[i] = Node(f"Electric eel {i}", prims=[(body, e["skin"]), (fin, "eel_fin"), (eyes, "eel_eye")],
+                            skin=Skin(joints, ibm), desc=e["desc"], anim_only=i != "A")
+        joints_of[i], ibms[i] = joints, ibm
+        poses = [m.pose(t) for t in ft]
+        for j, jn in enumerate(joints):
+            tr = np.array([p[0][j] for p in poses])
+            qs = np.array([mat_to_quat(p[1][j]) for p in poses])
+            for kq in range(1, len(qs)):
+                if np.dot(qs[kq], qs[kq - 1]) < 0:
+                    qs[kq] = -qs[kq]
+            swim.append(Channel(jn, "translation", ft, tr))
+            swim.append(Channel(jn, "rotation", ft, qs))
 
-    # ---- rig and skinned eel ----------------------------------------------------
-    rest_t = feed["t0"] + 0.42          # frozen moment: mid-volley, a flash is on
-    ibm = np.array([T(s, 0, 0) for s in S_J])
-    joints = [Node(f"eel_joint_{j:02d}") for j in range(NJ)]
-    rig = Node("Eel rig", children=joints, desc="24-joint swimming rig. The body follows the head's path.")
-    skin = Skin(joints, ibm)
-    body, fin, eyes = build_eel_bind()
-    eel = Node("Electric eel", prims=[(body, "eel_skin"), (fin, "eel_fin"), (eyes, "eel_eye")], skin=skin,
-               desc="Electrophorus, about 1.65 m. Its electric organ fills roughly 80% of the body: about 6,000 "
-                    "electrocytes in series, ~0.15 V each, up to 860 V (E. voltai) for ~2 ms. It swims, surfaces "
-                    "to breathe and hunts normally; the machine never stimulates, baits or restrains it.")
-    channels = []
-    ft = np.arange(motion.frames + 1) / FPS
-    poses = [motion.pose(t) for t in ft]
-    for j, jn in enumerate(joints):
-        tr = np.array([p[0][j] for p in poses])
-        qs = np.array([mat_to_quat(p[1][j]) for p in poses])
-        for k in range(1, len(qs)):
-            if np.dot(qs[k], qs[k - 1]) < 0:
-                qs[k] = -qs[k]
-        channels.append(Channel(jn, "translation", ft, tr))
-        channels.append(Channel(jn, "rotation", ft, qs))
+    # Field lines for every discharge, attached to that eel's middle joint so they ride with it.
+    field_node = {}
+    for e in EELS:
+        m = motions[e["id"]]
+        for ev in eel_events[e["id"]]:
+            P, Rm = m.pose(ev["t_mid"])
+            r_body = m.radii() * 1.1
+            lines = field_lines(np.array(ev["head"]), np.array(ev["tail"]), P[3:-2], r_body[3:-2])
+            ev["field_lines"] = len(lines)
+            Mmid = np.eye(4)
+            Mmid[:3, :3], Mmid[:3, 3] = Rm[MID_J], P[MID_J]
+            mesh = merge([tube(l, 0.0024, 6) for l in lines]).xform(np.linalg.inv(Mmid))
+            field_node[ev["id"]] = Node(
+                f"Field lines ({ev['id']})", mesh, "field_glow",
+                "Head-positive dipole field of this discharge, computed with the tank walls as insulating mirrors. "
+                "Most of the energy heats the water near the eel; the plates intercept about 0.1-1%.",
+                stl=False, anim_only=ev is not feed_a)
+        joints_of[e["id"]][MID_J].children = [field_node[ev["id"]] for ev in eel_events[e["id"]]]
 
-    # Field lines for each high-voltage event, attached to the middle joint so they ride with the eel.
-    field_nodes = []
-    for ev in events:
-        P, Rm = motion.pose(ev["t_mid"])
-        r_body = eel_profile(S_J / L_EEL)[0] * 1.3
-        lines = field_lines(np.array(ev["head"]), np.array(ev["tail"]), P[3:-2], r_body[3:-2])
-        ev["field_lines"] = len(lines)
-        Mmid = np.eye(4)
-        Mmid[:3, :3], Mmid[:3, 3] = Rm[MID_J], P[MID_J]
-        inv = np.linalg.inv(Mmid)
-        mesh = merge([tube(l, 0.0024, 6) for l in lines]).xform(inv)
-        fn = Node(f"Field lines ({ev['id']})", mesh, "field_glow",
-                  "Head-positive dipole field of this discharge, computed with the tank walls as insulating "
-                  "mirrors. Most of the energy heats the water near the eel; the plates intercept about 0.1-1%.",
-                  stl=False, anim_only=ev is not feed)
-        field_nodes.append(fn)
-        channels.append(Channel(fn, "scale", *step_track([(ev["t0"] + a, ev["t0"] + b) for a, b in ev["flashes"]],
-                                                         period), interp="STEP"))
-    joints[MID_J].children = field_nodes
-
-    # ---- energy flow overlays -------------------------------------------------------
-    flow = []
+    # ---- overlay nodes (one set, animated differently by each clip) ---------------------
+    plate_glow = {}
     for i, (pname, M) in enumerate(plate_frames):
-        for pol, matname, key in (("+", "glow_plus", "plus"), ("-", "glow_minus", "minus")):
-            wins = [(ev["t0"], ev["t0"] + ev["vis"] + 0.25) for ev in events if ev[key] == i]
-            if not wins:
-                continue
-            n = Node(f"Plate {pname} glow ({pol})", box((0.31, 0.46, 0.004), (0, 0, 0.0065)).xform(M), matname,
-                     f"Lights when plate {pname} is the {'positive' if pol == '+' else 'negative'} plate of the "
-                     "conducting pair.", stl=False, anim_only=True)
-            channels.append(Channel(n, "scale", *step_track(wins, period), interp="STEP"))
-            flow.append(n)
+        for pol, matname in (("+", "glow_plus"), ("-", "glow_minus")):
+            plate_glow[(i, pol)] = Node(
+                f"Plate {pname} glow ({pol})", box((0.31, 0.46, 0.004), (0, 0, 0.0065)).xform(M), matname,
+                f"Lights when plate {pname} is the {'positive' if pol == '+' else 'negative'} plate of the "
+                "conducting pair.", stl=False, anim_only=True)
     packet_mesh = sphere(0.011, 12, 8)
-    for c, line in enumerate(leads):
-        evs = [ev for ev in events if c in (ev["plus"], ev["minus"])]
-        if not evs:
-            continue
-        for k in range(PACKETS_PER_LEAD):
-            keys = []
-            for ev in evs:
-                keys += packet_keys(line, ev["t0"] + 0.05, ev["t0"] + ev["vis"] + 1.15, k, c == ev["plus"], period)
-            keys.sort(key=lambda x: x[0])
-            if keys[0][0] > 0:
-                keys.insert(0, (0.0, keys[0][1]))
-            if keys[-1][0] < period:
-                keys.append((period, keys[-1][1]))
-            pn = Node(f"Energy packet {plate_names[c]}-{k}", packet_mesh, "energy_packet",
-                      "Marks current in this lead: toward the harvester on the + lead, back to the plate on the "
-                      "- lead. Real current is instant; the dots are slowed so you can follow the path.",
-                      stl=False, anim_only=True, t=tuple(keys[0][1]))
-            channels.append(Channel(pn, "translation", [t for t, _ in keys], [p for _, p in keys]))
-            wins = [(ev["t0"] + 0.05, ev["t0"] + ev["vis"] + 1.15) for ev in evs]
-            channels.append(Channel(pn, "scale", *step_track(wins, period), interp="STEP"))
-            flow.append(pn)
+    packets = {(c, k): Node(f"Energy packet {plate_names[c]}-{k}", packet_mesh, "energy_packet",
+                            "Marks current in this lead: toward the harvester on the + lead, back to the plate on "
+                            "the - lead. Real current is instant; the dots are slowed so you can follow the path.",
+                            stl=False, anim_only=True)
+               for c in range(len(leads)) for k in range(PACKETS_PER_LEAD)}
     offsets = {"Bridge glow": (0.3, 1.2), "Catch capacitor glow": (0.4, 1.6), "Converter glow": (0.6, 1.9),
                "Supercapacitor glow": (0.9, 2.4)}
-    for name, (size, centre) in HARVESTER_GLOWS.items():
-        a, b = offsets[name]
-        n = Node(name, box(size, centre).xform(T(*E0)), "glow_component", stl=False, anim_only=True)
-        channels.append(Channel(n, "scale", *step_track([(ev["t0"] + a, ev["t0"] + ev["vis"] + b) for ev in events],
-                                                        period), interp="STEP"))
-        flow.append(n)
-    beacon_w, led_w = [], []
-    for ev in events:
-        for k in range(ev["alarm_flashes"]):
-            beacon_w.append((ev["t0"] + 0.5 + 0.5 * k, ev["t0"] + 0.75 + 0.5 * k))
-        led_w += [(ev["t0"] + a, ev["t0"] + a + 0.15) for a in (0.6, 0.9, 1.2)]
+    hglow = {name: Node(name, box(size, centre).xform(T(*E0)), "glow_component", stl=False, anim_only=True)
+             for name, (size, centre) in HARVESTER_GLOWS.items()}
     bn = Node("Beacon flash", sphere(0.034, 20, 12).xform(T(*BEACON_C)), "beacon_flash",
               "The alarm flashes and chirps after every high-voltage discharge, 2 to 12 times depending on "
-              "how much energy that discharge delivered.",
-              stl=False, anim_only=True)
+              "how much energy that discharge delivered.", stl=False, anim_only=True)
     ln = Node("Monitor LED flash", sphere(0.009, 12, 8).xform(T(*LED_C)), "led_flash",
               "The health monitor logs every discharge it detects.", stl=False, anim_only=True)
-    channels.append(Channel(bn, "scale", *step_track(beacon_w, period), interp="STEP"))
-    channels.append(Channel(ln, "scale", *step_track(led_w, period), interp="STEP"))
-    flow += [bn, ln]
-
-    # Display: old waveform until it refreshes after the feeding volley, then the new one.
     wave_a = merge(_spikes((0.07, 0.0, 0.0, 0.07), -0.15, 0.012, 0.045)
                    + _spikes((0.012,) * 5, 0.03, 0.03, 0.045)).xform(DISPLAY_M)
     burst = tuple(0.075 * 0.93 ** i for i in range(6))
     wave_b = merge(_spikes(burst, -0.16, 0.009, 0.045) + _spikes(tuple(0.06 * 0.9 ** i for i in range(5)), -0.08, 0.009, 0.045)
                    + _spikes((0.012,) * 4, 0.05, 0.03, 0.045)).xform(DISPLAY_M)
-    new_bar = box((0.03, 0.058, 0.001), (0.15, -0.114 + 0.029, 0.0125)).xform(DISPLAY_M)
-    flash = box((0.42, 0.28, 0.002), (0, 0, 0.0128)).xform(DISPLAY_M)
     wa = Node("E-paper waveform (before)", wave_a, "epaper_ink", stl=False)
     wb = Node("E-paper waveform (after refresh)", wave_b, "epaper_ink", stl=False, anim_only=True)
-    nb = Node("E-paper new bar", new_bar, "epaper_ink", stl=False, anim_only=True)
-    fl = Node("E-paper refresh flash", flash, "epaper_flash", stl=False, anim_only=True)
-    channels.append(Channel(wa, "scale", *step_track([(0, t_refresh + 0.2)], period), interp="STEP"))
-    channels.append(Channel(wb, "scale", *step_track([(t_refresh + 0.2, period)], period), interp="STEP"))
-    channels.append(Channel(nb, "scale", *step_track([(t_refresh + 0.2, period)], period), interp="STEP"))
-    channels.append(Channel(fl, "scale", *step_track([(t_refresh, t_refresh + 0.35)], period), interp="STEP"))
-
-    # Food: dropped through the hatch, sinks, eaten at the strike.
-    Pf, Rf = motion.pose(t_food)
-    food_end = Pf[0] + Rf[0][:, 0] * 0.03
-    food_start = np.array([food_end[0] - 0.02, WATER_TOP - 0.02, food_end[2] + 0.02])
+    nb1 = Node("E-paper new bar", box((0.03, 0.058, 0.001), (0.15, -0.114 + 0.029, 0.0125)).xform(DISPLAY_M),
+               "epaper_ink", stl=False, anim_only=True)
+    nb2 = Node("E-paper new bar (second refresh)",
+               box((0.03, 0.084, 0.001), (0.15, -0.114 + 0.042, 0.0125)).xform(DISPLAY_M),
+               "epaper_ink", "Today's bar grows when a second eel's feeding adds more energy.", stl=False,
+               anim_only=True)
+    fl = Node("E-paper refresh flash", box((0.42, 0.28, 0.002), (0, 0, 0.0128)).xform(DISPLAY_M), "epaper_flash",
+              stl=False, anim_only=True)
     food_mesh = sphere(1.0, 14, 10).xform(S(0.034, 0.016, 0.016))
-    food = Node("Food (shrimp)", food_mesh, "food", "Dropped through the feeding hatch by a keeper.",
-                stl=False, anim_only=True, t=tuple(food_start))
-    channels.append(Channel(food, "translation", [0, t_drop, t_food, period],
-                            [food_start, food_start, food_end, food_end]))
-    channels.append(Channel(food, "scale", *step_track([(t_drop, t_food + 0.12)], period), interp="STEP"))
+    foods, food_path = {}, {}
+    for e in EELS:
+        for ev in eel_events[e["id"]]:
+            if ev["kind"] != "feed":
+                continue
+            Pf, Rf = motions[e["id"]].pose(ev["t_cp"])
+            end = Pf[0] + Rf[0][:, 0] * 0.03
+            start = np.array([end[0] - 0.02, WATER_TOP - 0.02, end[2] + 0.02])
+            foods[ev["id"]] = Node(f"Food for {e['name']}", food_mesh, "food",
+                                   "Dropped through the feeding hatch by a keeper.", stl=False, anim_only=True)
+            food_path[ev["id"]] = (start, end, ev["t_cp"] - 4.2, ev["t_cp"])
 
-    # ---- rest pose = the frozen moment used by OBJ/STL and non-animating viewers ---
-    for ch in channels:
+    def clip_channels(ids):
+        """Every animated node gets a channel in every clip, so switching clips is deterministic."""
+        evs = sorted([ev for i in ids for ev in eel_events[i]], key=lambda x: x["t0"])
+        evset = {id(ev) for ev in evs}
+        ch = list(swim)
+        for i in "BC":
+            ch.append(Channel(rigs[i], "scale", *step_track([(0, period)] if i in ids else [], period), "STEP"))
+        for ev in all_events:
+            wins = [(ev["t0"] + a, ev["t0"] + b) for a, b in ev["flashes"]] if id(ev) in evset else []
+            ch.append(Channel(field_node[ev["id"]], "scale", *step_track(wins, period), "STEP"))
+        for (i, pol), node in plate_glow.items():
+            key = "plus" if pol == "+" else "minus"
+            wins = [(ev["t0"], ev["t0"] + ev["vis"] + 0.25) for ev in evs if ev[key] == i]
+            ch.append(Channel(node, "scale", *step_track(wins, period), "STEP"))
+        for (c, k), node in packets.items():
+            line = leads[c]
+            on = [ev for ev in evs if c in (ev["plus"], ev["minus"])]
+            keys = []
+            for ev in on:
+                keys += packet_keys(line, ev["t0"] + 0.05, ev["t0"] + ev["vis"] + 1.15, k, c == ev["plus"], period)
+            keys.sort(key=lambda x: x[0])
+            if not keys:
+                keys = [(0.0, line.at(0.0))]
+            if keys[0][0] > 0:
+                keys.insert(0, (0.0, keys[0][1]))
+            if keys[-1][0] < period:
+                keys.append((period, keys[-1][1]))
+            ch.append(Channel(node, "translation", [t for t, _ in keys], [p for _, p in keys]))
+            wins = [(ev["t0"] + 0.05, ev["t0"] + ev["vis"] + 1.15) for ev in on]
+            ch.append(Channel(node, "scale", *step_track(wins, period), "STEP"))
+        for name, node in hglow.items():
+            a, b = offsets[name]
+            ch.append(Channel(node, "scale", *step_track([(ev["t0"] + a, ev["t0"] + ev["vis"] + b) for ev in evs],
+                                                         period), "STEP"))
+        beacon_w = [(ev["t0"] + 0.5 + 0.5 * k, ev["t0"] + 0.75 + 0.5 * k) for ev in evs
+                    for k in range(ev["alarm_flashes"])]
+        led_w = [(ev["t0"] + a, ev["t0"] + a + 0.15) for ev in evs for a in (0.6, 0.9, 1.2)]
+        ch.append(Channel(bn, "scale", *step_track(beacon_w, period), "STEP"))
+        ch.append(Channel(ln, "scale", *step_track(led_w, period), "STEP"))
+        refresh = sorted(ev["t0"] + ev["vis"] + 2.6 for ev in evs if ev["kind"] == "feed")
+        r1 = refresh[0] + 0.2
+        r2 = refresh[1] + 0.2 if len(refresh) > 1 else period
+        ch.append(Channel(wa, "scale", *step_track([(0, r1)], period), "STEP"))
+        ch.append(Channel(wb, "scale", *step_track([(r1, period)], period), "STEP"))
+        ch.append(Channel(nb1, "scale", *step_track([(r1, r2)], period), "STEP"))
+        ch.append(Channel(nb2, "scale", *step_track([(r2, period)] if len(refresh) > 1 else [], period), "STEP"))
+        ch.append(Channel(fl, "scale", *step_track([(r, r + 0.35) for r in refresh], period), "STEP"))
+        for fid, node in foods.items():
+            start, end, t_drop, t_eat = food_path[fid]
+            active = any(ev["id"] == fid for ev in evs)
+            ch.append(Channel(node, "translation", [0, t_drop, t_eat, period], [start, start, end, end]))
+            ch.append(Channel(node, "scale", *step_track([(t_drop, t_eat + 0.12)] if active else [], period), "STEP"))
+        return evs, ch, refresh
+
+    clips, scenarios = [], {}
+    for n, ids in SCENARIOS.items():
+        evs, ch, refresh = clip_channels(ids)
+        clips.append((CLIP_NAMES[n], ch))
+        scenarios[n] = dict(ids=ids, events=evs, refresh=refresh)
+
+    # ---- rest pose = the frozen moment of the "1 eel" clip (OBJ/STL, non-animating viewers)
+    for ch in clips[0][1]:
         setattr(ch.node, {"translation": "t", "rotation": "r", "scale": "s"}[ch.path], tuple(ch.sample(rest_t)))
-    joint_world = np.array([jn.local() for jn in joints])
-    eel.static = [(skin_cpu(m, joint_world, ibm), mt) for m, mt in eel.prims]
+    joint_world = np.array([jn.local() for jn in joints_of["A"]])
+    eel_nodes["A"].static = [(skin_cpu(m, joint_world, ibms["A"]), mt) for m, mt in eel_nodes["A"].prims]
 
     # ---- assemble -------------------------------------------------------------------
-    habitat = Node("Habitat", children=static_habitat() + [food],
+    habitat = Node("Habitat", children=static_habitat() + list(foods.values()),
                    desc="Welfare comes first: a very large tank, soft warm water, places to hide.")
     electrodes = Node("Electrode array", children=[
         Node("Graphite plates E1-E6", plates, "graphite", "Six inert graphite plates, 300 x 450 mm. No copper or "
@@ -1290,39 +1412,61 @@ def scene_habitat():
                               "for 2 to 12 of them; a weak doublet's minimum is topped up from the supercapacitor.",
         "Education display": "E-paper panel: energy harvested today, the last pulse waveform, and how long one eel "
                              "would take to charge a phone (about a thousand years). It refreshes only when the "
-                             "eel has made enough surplus energy.",
+                             "eels have made enough surplus energy.",
     }
     pdesc = {
         "Listening speaker": "Plays the electrode signal through a bio-amplifier, the way scientists and aquariums "
                              "listen to electric fish: sensing pulses click, a volley buzzes at its pulse rate. It "
-                             "runs from mains power; audio needs far more energy than the eel provides.",
+                             "runs from mains power; audio needs far more energy than the eels provide.",
     }
     load_nodes = [Node(g, children=[Node(p, lparts[p][0], lparts[p][1], pdesc.get(p)) for p in pl], desc=gdesc[g])
                   for g, pl in groups.items()]
-    load_nodes[2].children += [wa, wb, nb, fl]
+    load_nodes[2].children += [wa, wb, nb1, nb2, fl]
     loads = Node("Loads (right purposes)", children=load_nodes)
+    flow = [plate_glow[k] for k in sorted(plate_glow)] + [packets[k] for k in sorted(packets)] \
+        + list(hglow.values()) + [bn, ln]
     energy = Node("Energy flow (animated)", children=flow,
                   desc="Glows and moving dots that show where the energy goes during each discharge.")
 
-    # ---- timeline for the viewer's panels --------------------------------------------
-    timeline = build_timeline(motion, events, t_drop, t_food, t_breath, t_refresh, plate_names, lv_dV, rest_t)
-    stems, sounds = build_soundtrack(period, events, t_drop, t_food, t_breath, lv_dV)
-    timeline["sounds"] = sounds
-    timeline["audio"] = dict(stems="models/eel-habitat-harvester.sound-stems.wav",
-                             mix="models/eel-habitat-harvester.soundtrack.wav", sample_rate=SR,
-                             channels=["tank", "speaker", "alarm"], pan=[0.0, 0.35, 0.55])
+    # ---- timeline and soundtrack for each option ------------------------------------------
+    eels_info = [dict(id=e["id"], name=e["name"], length=e["length"], organ_V=round(V_ORGAN * e["length"] / L_REF),
+                      colour=e["colour"], breath=round(breath_t[e["id"]], 3)) for e in EELS]
+    timeline = dict(period=round(period, 4), fps=FPS, rest_t=round(rest_t, 3), plates=plate_names, eels=eels_info,
+                    constants=dict(sigma_S_per_m=SIGMA, current_A=I_EEL, organ_V=V_ORGAN, water_W=P_WATER,
+                                   pair_ohm=R_PAIR, pulse_s=T_PULSE, converter_eff=ETA, diode_V=DIODE, lv_V=LV_VOLTS,
+                                   lv_plate_dV=round(lv_dv["A"], 3), supercap_F=SC_C, supercap_start_J=SC_E0,
+                                   catch_uF=47, phone_J=PHONE_J, typical_day_J=TYPICAL_DAY_J,
+                                   packet_travel_s=PACKET_TRAVEL),
+                    scenarios={})
+    stems = {}
+    for n, sc in scenarios.items():
+        sc.update(breath={i: breath_t[i] for i in sc["ids"]}, lv_dv={i: lv_dv[i] for i in sc["ids"]},
+                  motions={i: motions[i] for i in sc["ids"]}, names={e["id"]: e["name"] for e in EELS},
+                  lengths={e["id"]: e["length"] for e in EELS})
+        tl = build_timeline(period, sc, plate_names)
+        stems[n], tl["sounds"] = build_soundtrack(period, sc)
+        suffix = "" if n == 1 else f"-{n}-eels"
+        tl["audio"] = dict(stems=f"models/eel-habitat-harvester.sound-stems{suffix}.wav",
+                           mix=f"models/eel-habitat-harvester.soundtrack{suffix}.wav", sample_rate=SR,
+                           channels=["tank", "speaker", "alarm"], pan=[0.0, 0.35, 0.55])
+        tl["clip"] = CLIP_NAMES[n]
+        timeline["scenarios"][str(n)] = tl
     stats["stems"] = stems
-    stats.update(loop_s=round(period, 2), eel_body_m=L_EEL,
-                 events={ev["id"]: (plate_names[ev["plus"]], plate_names[ev["minus"]], ev["dV"], ev["mJ_pulse"],
-                                    ev["mJ_event"], ev["field_lines"]) for ev in events},
-                 lv_dV=round(lv_dV, 3))
-    roots = [habitat, eel, rig, electrodes, cables, harvester, loads, energy]
-    return roots, channels, timeline, stats
+    stats["clearances"] = check_clearances(motions, period)
+    stats.update(loop_s=round(period, 2),
+                 events={ev["id"]: (round(ev["t0"], 2), plate_names[ev["plus"]], plate_names[ev["minus"]], ev["dV"],
+                                    ev["mJ_pulse"], ev["mJ_event"], ev["field_lines"]) for ev in all_events},
+                 breaths={i: round(t, 2) for i, t in breath_t.items()},
+                 lv_dV={i: round(v, 3) for i, v in lv_dv.items()})
+    roots = [habitat, eel_nodes["A"], rigs["A"], eel_nodes["B"], rigs["B"], eel_nodes["C"], rigs["C"],
+             electrodes, cables, harvester, loads, energy]
+    return roots, clips, timeline, stats
 
 
-def lv_rate(t, events, t_food):
-    """Sensing-pulse rate (per second): faster while probing or hunting."""
-    busy = sum(math.exp(-((t - c) / 1.6) ** 2) for c in (events[0]["t0"], events[1]["t0"], t_food))
+def lv_rate(t, events):
+    """One eel's sensing-pulse rate (per second): faster while probing or hunting."""
+    centres = [ev["t0"] + (0.25 if ev["kind"] == "feed" else 0.0) for ev in events]
+    busy = sum(math.exp(-((t - c) / 1.6) ** 2) for c in centres)
     return 6 + 34 * min(busy, 1.0)
 
 
@@ -1394,7 +1538,8 @@ def _bursts(flashes, gap=0.05):
     return out
 
 
-def build_soundtrack(period, events, t_drop, t_food, t_breath, lv_dV):
+def build_soundtrack(period, sc):
+    events, ids = sc["events"], sc["ids"]
     n = int(round(period * SR))
     t = np.arange(n) / SR
     rng = np.random.default_rng(11)
@@ -1415,46 +1560,54 @@ def build_soundtrack(period, events, t_drop, t_food, t_breath, lv_dV):
             _place(tank, tb, _bubble(rng.uniform(0.0012, 0.004), rng.uniform(0.016, 0.045)))
     sounds.append(dict(t0=0.0, t1=round(period, 3), stem="tank", text="Filter pump hum, flowing water, bubbles"))
 
-    # Food drops in: a small splash and its entry bubbles.
-    splash = 0.10 * _band_noise(int(0.12 * SR), rng, 1500, 6000) * _env(int(0.12 * SR), 0.001, 0.02)
-    _place(tank, t_drop, splash)
-    _place(tank, t_drop + 0.01, _bubble(0.0035, 0.07))
-    _place(tank, t_drop + 0.05, _bubble(0.0018, 0.03))
-    sounds.append(dict(t0=round(t_drop - 0.05, 3), t1=round(t_drop + 0.7, 3), stem="tank",
-                       text="Plip: the food hits the water"))
+    for ev in events:
+        if ev["kind"] != "feed":
+            continue
+        name, k = sc["names"][ev["eel"]], L_REF / sc["lengths"][ev["eel"]]
+        t_drop, t_food = ev["t_cp"] - 4.2, ev["t_cp"]
+        # Food drops in: a small splash and its entry bubbles.
+        splash = 0.10 * _band_noise(int(0.12 * SR), rng, 1500, 6000) * _env(int(0.12 * SR), 0.001, 0.02)
+        _place(tank, t_drop, splash)
+        _place(tank, t_drop + 0.01, _bubble(0.0035, 0.07))
+        _place(tank, t_drop + 0.05, _bubble(0.0018, 0.03))
+        sounds.append(dict(t0=round(t_drop - 0.05, 3), t1=round(t_drop + 0.7, 3), stem="tank",
+                           text=f"Plip: food for {name} hits the water"))
+        # Feeding strike: the low thud of suction feeding (a smaller eel thuds a little higher).
+        _place(tank, t_food, _glide(95 * k, 45 * k, 0.35, 0.003, 0.07, 0.30 / k))
+        slosh = 0.07 * _band_noise(int(0.4 * SR), rng, 100, 900) * _env(int(0.4 * SR), 0.01, 0.15)
+        _place(tank, t_food + 0.02, slosh)
+        sounds.append(dict(t0=round(t_food - 0.05, 3), t1=round(t_food + 0.45, 3), stem="tank",
+                           text=f"Thud: {name}'s suction strike on the food"))
 
-    # The eel breathes: snout breaks the surface, gulps, then exhales bubbles as it dives.
-    sp = 0.12 * _band_noise(int(0.25 * SR), rng, 300, 3000) * _env(int(0.25 * SR), 0.02, 0.09)
-    _place(tank, t_breath - 0.05, sp)
-    _place(tank, t_breath + 0.02, _glide(240, 170, 0.35, 0.004, 0.05, 0.16))
-    _place(tank, t_breath + 0.12, _glide(200, 150, 0.30, 0.004, 0.04, 0.10))
-    for k in range(7):
-        _place(tank, t_breath + 1.0 + 0.11 * k + rng.uniform(0, 0.05), _bubble(rng.uniform(0.002, 0.005),
-                                                                              rng.uniform(0.03, 0.06)))
-    sounds.append(dict(t0=round(t_breath - 0.1, 3), t1=round(t_breath + 0.6, 3), stem="tank",
-                       text="Gulp: the eel takes a breath at the surface"))
-    sounds.append(dict(t0=round(t_breath + 1.0, 3), t1=round(t_breath + 1.9, 3), stem="tank",
-                       text="Bubbles as it dives"))
+    for i in ids:
+        name, k, tb = sc["names"][i], L_REF / sc["lengths"][i], sc["breath"][i]
+        # Breathing: snout breaks the surface, gulps, then exhales bubbles as it dives.
+        sp = 0.12 * _band_noise(int(0.25 * SR), rng, 300, 3000) * _env(int(0.25 * SR), 0.02, 0.09)
+        _place(tank, tb - 0.05, sp / k)
+        _place(tank, tb + 0.02, _glide(240 * k, 170 * k, 0.35, 0.004, 0.05, 0.16 / k))
+        _place(tank, tb + 0.12, _glide(200 * k, 150 * k, 0.30, 0.004, 0.04, 0.10 / k))
+        for j in range(7):
+            _place(tank, tb + 1.0 + 0.11 * j + rng.uniform(0, 0.05), _bubble(rng.uniform(0.002, 0.005) / k,
+                                                                            rng.uniform(0.03, 0.06)))
+        sounds.append(dict(t0=round(tb - 0.1, 3), t1=round(tb + 0.6, 3), stem="tank",
+                           text=f"Gulp: {name} takes a breath at the surface"))
+        sounds.append(dict(t0=round(tb + 1.0, 3), t1=round(tb + 1.9, 3), stem="tank",
+                           text=f"Bubbles as {name} dives"))
 
-    # Feeding strike: the low thud of suction feeding, then the water sloshing.
-    _place(tank, t_food, _glide(95, 45, 0.35, 0.003, 0.07, 0.30))
-    slosh = 0.07 * _band_noise(int(0.4 * SR), rng, 100, 900) * _env(int(0.4 * SR), 0.01, 0.15)
-    _place(tank, t_food + 0.02, slosh)
-    sounds.append(dict(t0=round(t_food - 0.05, 3), t1=round(t_food + 0.45, 3), stem="tank",
-                       text="Thud: the suction strike on the food"))
-
-    # Exhibit speaker: amplifier hiss and a little mains hum, sensing clicks, then the discharges.
+    # Exhibit speaker: amplifier hiss and a little mains hum, each eel's sensing clicks, then the discharges.
     spk += 0.004 * _band_noise(n, rng, 200, 5000) + 0.003 * np.sin(2 * np.pi * loopf(50.0) * t) \
         + 0.0015 * np.sin(2 * np.pi * loopf(150.0) * t)
-    lv = _eod(0.0015, _speaker_amp(lv_dV))
-    phase, tk = 0.0, 0.0
     step = 1 / 200
-    while tk < period:
-        phase += lv_rate(tk, events, t_food) * step
-        if phase >= 1.0:
-            phase -= 1.0
-            _place(spk, tk + rng.uniform(0, step), lv * rng.uniform(0.85, 1.0))
-        tk += step
+    for i in ids:
+        own = [ev for ev in events if ev["eel"] == i]
+        lv = _eod(0.0015, _speaker_amp(sc["lv_dv"][i]))
+        phase, tk = rng.uniform(0, 1), 0.0
+        while tk < period:
+            phase += lv_rate(tk, own) * step
+            if phase >= 1.0:
+                phase -= 1.0
+                _place(spk, tk + rng.uniform(0, step), lv * rng.uniform(0.85, 1.0))
+            tk += step
     sounds.append(dict(t0=0.0, t1=round(period, 3), stem="speaker", kind="lv",
                        text="Speaker: sensing clicks"))
     for ev in events:
@@ -1463,7 +1616,8 @@ def build_soundtrack(period, events, t_drop, t_food, t_breath, lv_dV):
             for a, b in ev["flashes"]:
                 _place(spk, ev["t0"] + a, _eod(0.002, amp))
             sounds.append(dict(t0=round(ev["t0"] - 0.02, 3), t1=round(ev["t0"] + ev["vis"] + 0.1, 3),
-                               stem="speaker", text=f"Speaker: two sharp clicks, the doublet ({ev['dV']:.0f} V at the plates)"))
+                               stem="speaker", text=f"Speaker: two sharp clicks, {ev['label'].split(':')[0]}'s "
+                                                    f"doublet ({ev['dV']:.0f} V at the plates)"))
         else:
             for a, b in _bursts(ev["flashes"]):
                 tp = ev["t0"] + a
@@ -1472,8 +1626,8 @@ def build_soundtrack(period, events, t_drop, t_food, t_breath, lv_dV):
                     _place(spk, tp, _eod(0.0018, amp * (1 - 0.15 * x)))
                     tp += 1 / (ev["rate"] - 70 * x)
             sounds.append(dict(t0=round(ev["t0"], 3), t1=round(ev["t0"] + ev["vis"], 3), stem="speaker",
-                               text=f"Speaker: the volley buzzes at its pulse rate, ~{ev['rate']} per second "
-                                    f"({ev['dV']:.0f} V at the plates)"))
+                               text=f"Speaker: {ev['label'].split(':')[0]}'s volley buzzes at ~{ev['rate']} "
+                                    f"pulses per second ({ev['dV']:.0f} V at the plates)"))
     spk = np.tanh(1.3 * spk) / math.tanh(1.3)          # the little amplifier clips softly
 
     # Alarm: one piezo chirp with each beacon flash.
@@ -1481,8 +1635,8 @@ def build_soundtrack(period, events, t_drop, t_food, t_breath, lv_dV):
     chirp = (np.sin(2 * np.pi * 3200 * tc) + 0.3 * np.sin(2 * np.pi * 6400 * tc) + 0.15 * np.sin(2 * np.pi * 9600 * tc))
     chirp *= 0.13 * np.minimum(1, np.minimum(tc / 0.004, (tc[-1] - tc) / 0.004))
     for ev in events:
-        for k in range(ev["alarm_flashes"]):
-            _place(alarm, ev["t0"] + 0.5 + 0.5 * k, chirp)
+        for kk in range(ev["alarm_flashes"]):
+            _place(alarm, ev["t0"] + 0.5 + 0.5 * kk, chirp)
         sounds.append(dict(t0=round(ev["t0"] + 0.5, 3), t1=round(ev["t0"] + 0.6 + 0.5 * (ev["alarm_flashes"] - 1), 3),
                            stem="alarm", text=f"Alarm: {ev['alarm_flashes']} chirps with the beacon"))
 
@@ -1500,20 +1654,45 @@ def write_wav(path, data):
         w.writeframes(pcm.tobytes())
 
 
-def write_soundtrack(stems, pan):
+def write_soundtrack(stems, pan, suffix=""):
     """Stems (tank, speaker, alarm) for the viewer, and a stereo mix for any video or 3D renderer."""
     ang = (np.asarray(pan) + 1) * math.pi / 4                  # equal-power panning
     mix = np.stack([stems @ np.cos(ang), stems @ np.sin(ang)], axis=1)
     g = 0.89 / np.max(np.abs(mix))
-    write_wav(os.path.join(OUT, "eel-habitat-harvester.sound-stems.wav"), stems * g)
-    write_wav(os.path.join(OUT, "eel-habitat-harvester.soundtrack.wav"), mix * g)
+    write_wav(os.path.join(OUT, f"eel-habitat-harvester.sound-stems{suffix}.wav"), stems * g)
+    write_wav(os.path.join(OUT, f"eel-habitat-harvester.soundtrack{suffix}.wav"), mix * g)
     rms = np.sqrt(np.mean((stems * g) ** 2, axis=0))
-    print("   soundtrack: %.2f s, stem RMS tank %.3f / speaker %.3f / alarm %.3f, mix peak 0.89"
-          % (len(stems) / SR, *rms))
+    print("   soundtrack%s: %.2f s, stem RMS tank %.3f / speaker %.3f / alarm %.3f"
+          % (suffix or " (1 eel)", len(stems) / SR, *rms))
 
 
-def build_timeline(motion, events, t_drop, t_food, t_breath, t_refresh, plate_names, lv_dV, rest_t):
-    period = motion.T
+def _caption_track(period, items, default):
+    """Turn overlapping (t0, t1, text) items into a seamless caption list; latest start wins."""
+    flat_ = []
+    for a, b, text in items:
+        a, b = a % period, (a % period) + (b - a)
+        if b > period:
+            flat_ += [(a, period, text), (0.0, b - period, text)]
+        else:
+            flat_.append((a, b, text))
+    cuts = sorted({0.0, period} | {round(a, 4) for a, _, _ in flat_} | {round(b, 4) for _, b, _ in flat_})
+    out = []
+    for a, b in zip(cuts, cuts[1:]):
+        if b - a < 1e-4:
+            continue
+        mid = (a + b) / 2
+        live = [it for it in flat_ if it[0] <= mid < it[1]]
+        text = max(live, key=lambda it: it[0])[2] if live else default
+        if out and out[-1]["text"] == text:
+            out[-1]["t1"] = round(b, 3)
+        else:
+            out.append(dict(t0=round(a, 3), t1=round(b, 3), text=text))
+    return out
+
+
+def build_timeline(period, sc, plate_names):
+    events, ids = sc["events"], sc["ids"]
+    names = sc["names"]
     ts = np.round(np.arange(0, period + 1e-9, 0.05), 3)
 
     def ramp(t, a, b):
@@ -1537,63 +1716,66 @@ def build_timeline(motion, events, t_drop, t_food, t_breath, t_refresh, plate_na
                 v = max(v, x)
         return v
 
-    series = {"t": ts.tolist(), "cap_V": [], "harvest_mJ": [], "stored_mJ": [], "speed": [], "lv_hz": []}
+    series = {"t": ts.tolist(), "cap_V": [], "harvest_mJ": [], "stored_mJ": [], "lv_hz": [],
+              "lv_by_eel": {i: [] for i in ids}}
     for t in ts:
         series["cap_V"].append(round(cap_v(t), 2))
         series["harvest_mJ"].append(round(sum(ev["mJ_event"] * ramp(t, ev["t0"] + 0.3, ev["t0"] + ev["vis"] + 1.2)
                                               for ev in events), 3))
         series["stored_mJ"].append(round(sum(ev["mJ_stored"] * ramp(t, ev["t0"] + 0.9, ev["t0"] + ev["vis"] + 2.4)
                                              for ev in events), 3))
-        series["speed"].append(round(motion.speed(t), 3))
-        series["lv_hz"].append(round(lv_rate(t, events, t_food), 1))
+        total = 0.0
+        for i in ids:
+            r = lv_rate(t, [ev for ev in events if ev["eel"] == i])
+            series["lv_by_eel"][i].append(round(r, 1))
+            total += r
+        series["lv_hz"].append(round(total, 1))
 
-    captions = [
-        dict(t0=0.0, text="Cruising and sensing with weak ~10 V pulses. They are far too weak to harvest."),
-        dict(t0=t_breath - 1.6, text="Rising to gulp air. Electric eels breathe air at the surface."),
-        dict(t0=t_breath + 1.2, text="Cruising and sensing with weak ~10 V pulses."),
-        dict(t0=events[0]["t0"] - 0.3, text=events[0]["story"]),
-        dict(t0=events[0]["t0"] + 3.0, text="Cruising toward the hide tube."),
-        dict(t0=events[1]["t0"] - 0.3, text=events[1]["story"]),
-        dict(t0=t_drop, text="A keeper drops food through the hatch. The eel senses it sinking."),
-        dict(t0=events[2]["t0"] - 0.3, text=events[2]["story"]),
-        dict(t0=events[2]["t0"] + events[2]["vis"] + 1.0,
-             text="Energy reaches storage; the beacon warns keepers the water is live."),
-        dict(t0=t_refresh, text="Enough surplus: the e-paper display refreshes with the new volley."),
-        dict(t0=t_refresh + 3.0, text="Back to cruising. One eel collects ~0.1 J on a typical day."),
-    ]
-    captions.sort(key=lambda c: c["t0"])
-    for i, c in enumerate(captions):
-        c["t1"] = captions[i + 1]["t0"] if i + 1 < len(captions) else period
-        c["t0"], c["t1"] = round(c["t0"], 3), round(c["t1"], 3)
+    items = []
+    for ev in events:
+        items.append((ev["t0"] - 0.3, ev["t0"] + ev["vis"] + 0.9, ev["story"]))
+        if ev["kind"] == "feed":
+            items.append((ev["t_cp"] - 4.2, ev["t0"] - 0.3,
+                          f"A keeper drops food for {names[ev['eel']]} through the hatch. It senses it sinking."))
+            items.append((ev["t0"] + ev["vis"] + 0.9, ev["t0"] + ev["vis"] + 2.6,
+                          "Energy reaches storage; the beacon warns keepers the water is live."))
+    for r in sc["refresh"]:
+        items.append((r, r + 2.6, "Enough surplus: the e-paper display refreshes with the new volley."))
+    for i in ids:
+        tb = sc["breath"][i]
+        items.append((tb - 1.6, tb + 1.2, f"{names[i]} rises to gulp air. Electric eels breathe air at the surface."))
+    default = ("Cruising and sensing with weak ~10 V pulses. They are far too weak to harvest." if len(ids) == 1 else
+               f"{len(ids)} eels cruising, each sensing with its own weak ~10 V pulses. Far too weak to harvest.")
+    captions = _caption_track(period, items, default)
 
     log = []
     for ev in events:
         log.append(dict(t=round(ev["t0"], 3), text=f"{ev['label']}: {plate_names[ev['plus']]}+ / "
-                                                     f"{plate_names[ev['minus']]}−, ΔV {ev['dV']:.1f} V, "
+                                                     f"{plate_names[ev['minus']]}\u2212, \u0394V {ev['dV']:.1f} V, "
                                                      f"{ev['mJ_event']:.1f} mJ collected"))
-    log.append(dict(t=round(t_breath, 3), text="Surfaced to breathe"))
-    log.append(dict(t=round(t_drop, 3), text="Food dropped through the hatch"))
-    log.append(dict(t=round(t_refresh, 3), text="Display refreshed from surplus energy"))
+        if ev["kind"] == "feed":
+            log.append(dict(t=round((ev["t_cp"] - 4.2) % period, 3), text=f"Food dropped for {names[ev['eel']]}"))
+    for i in ids:
+        log.append(dict(t=round(sc["breath"][i], 3), text=f"{names[i]} surfaced to breathe"))
+    for r in sc["refresh"]:
+        log.append(dict(t=round(r, 3), text="Display refreshed from surplus energy"))
     log.sort(key=lambda x: x["t"])
 
     clean = []
     for ev in events:
         e = {k: v for k, v in ev.items() if k not in ("story",)}
         e["flashes"] = [[round(a, 3), round(b, 3)] for a, b in ev["flashes"]]
-        for k in ("t0", "t_mid", "vis"):
+        for k in ("t0", "t_mid", "vis", "t_cp"):
             e[k] = round(float(e[k]), 3)
         clean.append(e)
     markers = [dict(t=round(e["t0"], 3), kind=e["kind"], label=e["label"]) for e in clean]
-    markers += [dict(t=round(t_breath, 3), kind="breath", label="Breath"),
-                dict(t=round(t_drop, 3), kind="food", label="Food dropped"),
-                dict(t=round(t_refresh, 3), kind="display", label="Display refresh")]
-    return dict(
-        period=round(period, 4), fps=FPS, rest_t=round(rest_t, 3), plates=plate_names,
-        constants=dict(sigma_S_per_m=SIGMA, current_A=I_EEL, organ_V=V_ORGAN, water_W=P_WATER, pair_ohm=R_PAIR,
-                       pulse_s=T_PULSE, converter_eff=ETA, diode_V=DIODE, lv_V=LV_VOLTS, lv_plate_dV=round(lv_dV, 3),
-                       supercap_F=SC_C, supercap_start_J=SC_E0, catch_uF=47, phone_J=PHONE_J,
-                       typical_day_J=TYPICAL_DAY_J, packet_travel_s=PACKET_TRAVEL),
-        events=clean, captions=captions, log=log, markers=sorted(markers, key=lambda m: m["t"]), series=series)
+    markers += [dict(t=round(sc["breath"][i], 3), kind="breath", label=f"{names[i]} breathes") for i in ids]
+    markers += [dict(t=round((e["t_cp"] - 4.2) % period, 3), kind="food", label=f"Food for {names[e['eel']]}")
+                for e in clean if e["kind"] == "feed"]
+    markers += [dict(t=round(r, 3), kind="display", label="Display refresh") for r in sc["refresh"]]
+    return dict(eels=list(ids), events=clean, captions=captions, log=log,
+                markers=sorted(markers, key=lambda m: m["t"]), series=series,
+                refresh=[round(r, 3) for r in sc["refresh"]])
 
 
 # --------------------------------------------------------------------------
@@ -1823,18 +2005,22 @@ def write_glb(path, roots, title, channels=(), clip=None):
             p["material"] = used.index(p["material"])
 
     animations = []
-    if channels:
-        samplers, chans, time_cache = [], [], {}
-        for ch in channels:
+    if channels and not isinstance(channels[0], tuple):
+        channels = [(clip or title, channels)]
+    time_cache, out_cache = {}, {}
+    for clip_name, clip_channels in channels:          # several clips can share swimming tracks
+        samplers, chans = [], []
+        for ch in clip_channels:
             times = ch.times.astype(np.float32)
             key = times.tobytes()
             if key not in time_cache:
                 time_cache[key] = accessor(times, "SCALAR", 5126, minmax=True)
-            vals = ch.values.astype(np.float32)
-            out = accessor(vals, "VEC4" if ch.path == "rotation" else "VEC3", 5126)
-            samplers.append({"input": time_cache[key], "output": out, "interpolation": ch.interp})
+            vkey = (id(ch.values), ch.path)
+            if vkey not in out_cache:
+                out_cache[vkey] = accessor(ch.values.astype(np.float32), "VEC4" if ch.path == "rotation" else "VEC3", 5126)
+            samplers.append({"input": time_cache[key], "output": out_cache[vkey], "interpolation": ch.interp})
             chans.append({"sampler": len(samplers) - 1, "target": {"node": node_index[id(ch.node)], "path": ch.path}})
-        animations.append({"name": clip or title, "samplers": samplers, "channels": chans})
+        animations.append({"name": clip_name, "samplers": samplers, "channels": chans})
 
     mats, ext_used = [], set()
     for name in used:
@@ -1938,18 +2124,22 @@ def export(stem, roots, title, channels=(), clip=None):
     verts = sum(len(m.pos) for _, m in leaves)
     tris = sum(len(m.idx) for _, m in leaves)
     sizes = {ext: os.path.getsize(base + ext) for ext in (".glb", ".obj", ".mtl", ".stl")}
+    n_ch = sum(len(c) for _, c in channels) if channels and isinstance(channels[0], tuple) else len(channels)
     print(f"{stem}: {len(leaves)} primitives, {verts:,} vertices, {tris:,} triangles (STL {n_stl:,}), "
-          f"{len(channels)} animation channels")
+          f"{n_ch} animation channels")
     print("   " + ", ".join(f"{e} {s / 1e6:.2f} MB" for e, s in sizes.items()))
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    roots, channels, timeline, stats = scene_habitat()
-    export("eel-habitat-harvester", roots, "Passive eel habitat harvester", channels, "Swim and harvest (loop)")
-    write_soundtrack(stats.pop("stems"), timeline["audio"]["pan"])
+    roots, clips, timeline, stats = scene_habitat()
+    export("eel-habitat-harvester", roots, "Passive eel habitat harvester", clips)
+    for n, stems in stats.pop("stems").items():
+        write_soundtrack(stems, [0.0, 0.35, 0.55], "" if n == 1 else f"-{n}-eels")
     with open(os.path.join(OUT, "eel-habitat-harvester.timeline.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump(timeline, f, separators=(",", ":"))
+    for k, v in stats.pop("clearances").items():
+        print(f"    clearance {k:34s} {v[0]:+.3f} m at {v[1]} s")
     print("   ", stats)
     roots, channels, stats = scene_organ()
     export("artificial-electric-organ", roots, "Artificial electric organ (eel-inspired hydrogel stack)", channels,
